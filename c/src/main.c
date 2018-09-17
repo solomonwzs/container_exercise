@@ -1,11 +1,11 @@
 #define _GNU_SOURCE
 
 #include "base.h"
+#include "mount.h"
 #include <sched.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mount.h>
 #include <sys/wait.h>
 
 #define STACK_SIZE (1024 * 1024)
@@ -19,9 +19,15 @@ container_run(void *arg) {
     lperror("sethostname");
     return 1;
   }
-  if (mount("proc", "/proc", "proc", 0, NULL) != 0) {
-    lperror("mount");
+
+  const char *path = *(const char **)arg;
+  umount_fs(path);
+  if (mount_fs(path) != 0) {
     return 1;
+  }
+
+  if (chdir(path) != 0 || chroot("./") != 0) {
+    lperror("chdir/chroot");
   }
 
   char *cmd[] = {
@@ -31,12 +37,17 @@ container_run(void *arg) {
   execv(cmd[0], cmd);
   lperror("execv");
 
-  return 0;
+  return 1;
 }
 
 
 int
 main(int argc, char **args) {
+  if (argc < 2) {
+    ldebug("miss arguments.\n");
+    return 1;
+  }
+
   ldebug("Start.\n");
 
   u_int8_t stack[STACK_SIZE];
@@ -46,7 +57,7 @@ main(int argc, char **args) {
                               | CLONE_NEWIPC  // IPC namespaces
                               | CLONE_NEWPID  // PID namespaces
                               | CLONE_NEWUTS, // UTS namespaces
-                              NULL);
+                              &args[1]);
 
   if (container_pid == -1) {
     lperror("new container");

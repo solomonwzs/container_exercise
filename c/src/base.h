@@ -10,6 +10,8 @@
 #define COLOR_DEB "\e[2;3;32m"
 #define COLOR_INF "\e[2;3;37m"
 
+#define BASESYS_PATH "/home/solomon/workspace/basesystem/debian/"
+
 #define _print(_fmt_, _color_, ...) \
     fprintf(stderr, _color_ "=%d= [%s:%d:%s]\e[0m " _fmt_, \
             getpid(), __FILE__, __LINE__, __func__, ## __VA_ARGS__)
