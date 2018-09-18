@@ -6,7 +6,7 @@ ALL_SRC		= $(wildcard src/*.c)
 
 MAIN_PATH		= src
 BUILD_PATH		= bin
-BASESYS_PATH	= /home/solomon/workspace/basesystem/debian/
+BASESYS_PATH	= /home/solomon/workspace/basesystem/debian_stable/
 
 MACROS	=
 

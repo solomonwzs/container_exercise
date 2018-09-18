@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #define COLOR_ERR "\e[2;3;31m"

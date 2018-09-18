@@ -43,6 +43,8 @@ mount_fs(const char *path) {
     if ((r = mount(f->src, p, f->fstype, f->flags, NULL)) != 0) {
       lperror(p);
       return r;
+    } else {
+      ldebug("%s: ok\n", p);
     }
   }
 
@@ -63,6 +65,8 @@ umount_fs(const char *path) {
     strcpy(p + len, mfiles[i].target);
     if ((r = umount(p)) != 0) {
       lperror(p);
+    } else {
+      ldebug("%s: ok\n", p);
     }
   }
 
