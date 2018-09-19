@@ -1,5 +1,5 @@
-#ifndef ID_MAP_H
-#define ID_MAP_H
+#ifndef _MY_ID_MAP_H
+#define _MY_ID_MAP_H
 
 #include <sys/types.h>
 

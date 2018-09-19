@@ -21,9 +21,9 @@ static struct mount_atts mfiles[] = {
   {"shm",     "dev/shm",  "tmpfs",    0},
   {"tmpfs",   "run",      "tmpfs",    0},
 
-  /* {"conf/hosts",       "etc/hosts",       "none", MS_BIND}, */
-  /* {"conf/hostname",    "etc/hostname",    "none", MS_BIND}, */
-  /* {"conf/resolv.conf", "etc/resolv.conf", "none", MS_BIND}, */
+  {"/etc/hosts",       "etc/hosts",       "none", MS_BIND},
+  // {"/etc/hostname",    "etc/hostname",    "none", MS_BIND},
+  {"/etc/resolv.conf", "etc/resolv.conf", "none", MS_BIND},
 };
 
 
@@ -35,14 +35,14 @@ mount_fs(const char *path) {
   size_t len = strlen(path);
   strcpy(p, path);
 
-  for (size_t i = 0; i < n; ++i) {
+  for (int i = 0; i < n; ++i) {
     struct mount_atts *f = mfiles + i;
     int r;
 
     strcpy(p + len, mfiles[i].target);
     if ((r = mount(f->src, p, f->fstype, f->flags, NULL)) != 0) {
       lperror(p);
-      return r;
+      // return r;
     } else {
       ldebug("%s: ok\n", p);
     }

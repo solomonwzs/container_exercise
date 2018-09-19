@@ -2,11 +2,13 @@
 
 C			= gcc
 CFLAGS		= -Wall -fpic -g -c
+LIBS		= -lcap
 ALL_SRC		= $(wildcard src/*.c)
 
 MAIN_PATH		= src
 BUILD_PATH		= bin
-BASESYS_PATH	= /home/solomon/workspace/basesystem/debian_stable/
+# BASESYS_PATH	= /home/solomon/workspace/basesystem/debian_stable/
+BASESYS_PATH	= /home/solomon/workspace/basesystem/ubuntu_xenial_1604/
 
 MACROS	=
 
@@ -16,7 +18,7 @@ MACROS	=
 	@$(C) $(CFLAGS) $(MACROS) $< -o $@
 
 all:obj pre
-	@$(C) $(MAIN_PATH)/*.o -o $(BUILD_PATH)/main
+	@$(C) $(MAIN_PATH)/*.o $(LIBS) -o $(BUILD_PATH)/main
 	@echo -e "\e[1;3;32m[OK]\e[0m main ok"
 
 obj:$(ALL_SRC:%.c=%.o)
