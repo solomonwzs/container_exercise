@@ -10,6 +10,7 @@
 #define COLOR_WAR "\e[2;3;33m"
 #define COLOR_DEB "\e[2;3;32m"
 #define COLOR_INF "\e[2;3;37m"
+#define COLOR_NON "\e[0m"
 
 #define _print(_fmt_, _color_, ...) \
     fprintf(stderr, _color_ "=%d= [%s:%d:%s]\e[0m " _fmt_, \

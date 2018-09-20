@@ -29,15 +29,40 @@ struct container_arg {
 };
 
 
+static inline int
+init_container_arg(struct container_arg *arg, const char *path) {
+  arg->basesystem_path = path;
+  return pipe(arg->pipefd);
+}
+
+
+static inline void
+child_wait(struct container_arg *arg) {
+  char ch;
+  read(arg->pipefd[0], &ch, 1);
+}
+
+
+static inline void
+child_awake(struct container_arg *arg) {
+  char ch;
+  write(arg->pipefd[1], &ch, 1);
+}
+
+
 static int
 run(void *arg) {
   ldebug("Container start.\n");
 
   struct container_arg *carg = (struct container_arg *)arg;
-  char ch;
   close(carg->pipefd[1]);
-  list_caps();
-  read(carg->pipefd[0], &ch, 1);
+  child_wait(carg);
+
+  // cap_t caps = cap_from_text("all= cap_sys_admin-e cap_net_raw+ep");
+  // cap_t caps = cap_from_text("all+ep cap_net_raw-ep");
+  // cap_set_proc(caps);
+  // cap_free(caps);
+  list_caps;
 
   if (sethostname(HOSTNAME, strlen(HOSTNAME)) == -1) {
     lperror("sethostname");
@@ -45,7 +70,7 @@ run(void *arg) {
   }
 
   const char *path = carg->basesystem_path;
-  umount_fs(path);
+  // umount_fs(path);
   if (mount_fs(path) != 0) {
     // return 1;
   }
@@ -54,11 +79,13 @@ run(void *arg) {
     lperror("chdir/chroot");
   }
 
+  system("/bin/ping -c 1 baidu.com");
+
   char *cmd[] = {
     "/bin/bash",
     NULL
   };
-  execv(cmd[0], cmd);
+  execvp(cmd[0], cmd);
   lperror("execv");
 
   return 1;
@@ -70,8 +97,7 @@ container_run(const char *path) {
   ldebug("Start.\n");
 
   struct container_arg carg;
-  carg.basesystem_path = path;
-  if (pipe(carg.pipefd) != 0) {
+  if (init_container_arg(&carg, path) != 0) {
     lperror("pipe");
     return 1;
   }
@@ -95,12 +121,15 @@ container_run(const char *path) {
 
   set_uid_map(container_pid, 0, getuid(), 1);
   set_gid_map(container_pid, 0, getgid(), 1);
-  close(carg.pipefd[1]);
+
+  close(carg.pipefd[0]);
+  child_awake(&carg);
 
   get_ns(self, "pid");
   get_ns(container_pid, "pid");
 
   waitpid(container_pid, NULL, 0);
+  close(carg.pipefd[1]);
 
   ldebug("End.\n");
   return 0;
