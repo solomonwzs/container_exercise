@@ -1,8 +1,9 @@
 #define _GNU_SOURCE
 
 #include "base.h"
-#include "container.h"
 #include "capability.h"
+#include "container.h"
+#include "mount.h"
 #include <sched.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -17,13 +18,8 @@ run(void *arg) {
 
 
 int
-main(int argc, char **args) {
-  if (argc < 2) {
-    ldebug("miss arguments.\n");
-    return 1;
-  }
-  const char *path = args[1];
-  container_run(path);
+main(int argc, char **argv) {
+  return container_run(argc, argv);
 
   // char stack[STACK_SIZE];
   // pid_t pid = clone(run, stack + STACK_SIZE,
@@ -34,6 +30,4 @@ main(int argc, char **args) {
   // } else {
   //   waitpid(pid, NULL, 0);
   // }
-
-  return 0;
 }

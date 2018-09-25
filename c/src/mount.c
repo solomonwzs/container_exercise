@@ -4,15 +4,7 @@
 #include <sys/mount.h>
 
 
-struct mount_atts {
-  const char *src;
-  const char *target;
-  const char *fstype;
-  unsigned long flags;
-};
-
-
-static struct mount_atts mfiles[] = {
+static const struct mount_attrs mfiles[] = {
   {"proc",    "proc",     "proc",     0},
   {"sysfs",   "sys",      "sysfs",    0},
   {"none",    "tmp",      "tmpfs",    0},
@@ -29,14 +21,14 @@ static struct mount_atts mfiles[] = {
 
 int
 mount_fs(const char *path) {
-  size_t n = sizeof(mfiles) / sizeof(struct mount_atts);
+  size_t n = sizeof(mfiles) / sizeof(struct mount_attrs);
 
   char p[64];
   size_t len = strlen(path);
   strcpy(p, path);
 
   for (int i = 0; i < n; ++i) {
-    struct mount_atts *f = mfiles + i;
+    const struct mount_attrs *f = mfiles + i;
     int r;
 
     strcpy(p + len, mfiles[i].target);
@@ -54,7 +46,7 @@ mount_fs(const char *path) {
 
 int
 umount_fs(const char *path) {
-  size_t n = sizeof(mfiles) / sizeof(struct mount_atts);
+  size_t n = sizeof(mfiles) / sizeof(struct mount_attrs);
 
   char p[64];
   size_t len = strlen(path);

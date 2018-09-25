@@ -3,12 +3,13 @@
 #include "base.h"
 #include "capability.h"
 #include "container.h"
-#include "mount.h"
 #include "id_map.h"
+#include "mount.h"
 #include <sched.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mount.h>
 #include <sys/wait.h>
 
 #define STACK_SIZE (1024 * 1024)
@@ -23,17 +24,20 @@
 } while (0)
 
 
-struct container_arg {
-  const char *basesystem_path;
-  int pipefd[2];
+static struct env_attrs {
+  const char *name;
+  const char *value;
+  int overwrite;
+} container_env[] = {
+  {"PATH", "/usr/bin:/usr/local/bin:/usr/local/sbin:/bin:/sbin", 1},
 };
 
 
-static inline int
-init_container_arg(struct container_arg *arg, const char *path) {
-  arg->basesystem_path = path;
-  return pipe(arg->pipefd);
-}
+struct container_arg {
+  int argc;
+  char **argv;
+  int pipefd[2];
+};
 
 
 static inline void
@@ -58,25 +62,77 @@ run(void *arg) {
   close(carg->pipefd[1]);
   child_wait(carg);
 
+  int opt;
+  int len = 0;
+  char buf[128];
+  char path[128] = {0};
+  while ((opt = getopt(carg->argc, carg->argv, "+n:m:p:e:")) != -1) {
+    switch (opt) {
+      case 'n':
+        if (sethostname(optarg, strlen(optarg)) == -1) {
+          lperror("hostname");
+          return 1;
+        }
+        break;
+      case 'p':
+        strcpy(path, optarg);
+        len = strlen(path);
+        break;
+      case 'm':
+        if (len == 0) {
+          ldebug("please set -p first\n");
+          return 1;
+        }
+
+        for (int i = 0; i < strlen(optarg); ++i) {
+          if (optarg[i] == ':') {
+            strncpy(buf, optarg, i);
+            strcpy(path + len, optarg + i + 1);
+
+            const char *src = buf;
+            const char *target = path;
+
+            FILE *fd = fopen(target, "a");
+            if (fd == NULL) {
+              lperror(target);
+              return 1;
+            } else {
+              fclose(fd);
+            }
+
+            if (mount(src, target, "none", MS_BIND, NULL) != 0) {
+              lperror("mount");
+            }
+            break;
+          }
+        }
+        break;
+      case 'e':
+        break;
+      default:
+        return 1;
+    }
+  }
+  path[len] = '\0';
+
   // cap_t caps = cap_from_text("all= cap_sys_admin-e cap_net_raw+ep");
   // cap_t caps = cap_from_text("all+ep cap_net_raw-ep");
   // cap_set_proc(caps);
   // cap_free(caps);
   list_caps;
 
-  if (sethostname(HOSTNAME, strlen(HOSTNAME)) == -1) {
-    lperror("sethostname");
-    // return 1;
-  }
-
-  const char *path = carg->basesystem_path;
-  // umount_fs(path);
   if (mount_fs(path) != 0) {
-    // return 1;
+    return 1;
   }
-
   if (chdir(path) != 0 || chroot("./") != 0) {
     lperror("chdir/chroot");
+    return 1;
+  }
+
+  size_t n = sizeof(container_env) / sizeof(struct env_attrs);
+  for (int i = 0; i < n; ++i) {
+    struct env_attrs *e = container_env + i;
+    setenv(e->name, e->value, e->overwrite);
   }
 
   system("/bin/ping -c 1 baidu.com");
@@ -93,11 +149,14 @@ run(void *arg) {
 
 
 int
-container_run(const char *path) {
+container_run(int argc, char **argv) {
   ldebug("Start.\n");
 
-  struct container_arg carg;
-  if (init_container_arg(&carg, path) != 0) {
+  struct container_arg carg = {
+    .argc = argc,
+    .argv = argv,
+  };
+  if (pipe(carg.pipefd) != 0) {
     lperror("pipe");
     return 1;
   }
@@ -105,8 +164,9 @@ container_run(const char *path) {
   u_int8_t stack[STACK_SIZE];
   pid_t self = getpid();
   pid_t container_pid = clone(run, stack + STACK_SIZE,
-                              CLONE_NEWUSER   // User namespaces
-                              | CLONE_NEWNS   // Mount namespaces
+                              CLONE_NEWNS     // Mount namespaces
+                              | CLONE_NEWNET  // Network namespaces
+                              | CLONE_NEWUSER // User namespaces
                               | CLONE_NEWIPC  // IPC namespaces
                               | CLONE_NEWPID  // PID namespaces
                               | CLONE_NEWUTS  // UTS namespaces

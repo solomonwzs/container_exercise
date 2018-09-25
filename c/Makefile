@@ -27,4 +27,7 @@ pre:
 	@[ -d "$(BUILD_PATH)" ] || mkdir -p $(BUILD_PATH)
 
 test: all
-	@$(BUILD_PATH)/main "$(BASESYS_PATH)"
+	@$(BUILD_PATH)/main \
+		-n "container" \
+		-p "$(BASESYS_PATH)" \
+		-m "./sh/network.sh:usr/local/bin/network.sh"
