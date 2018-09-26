@@ -5,6 +5,7 @@
 #include "container.h"
 #include "id_map.h"
 #include "mount.h"
+#include "netns.h"
 #include <sched.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -19,18 +20,10 @@
   char __filename[64]; \
   char __buf[64]; \
   sprintf(__filename, "/proc/%d/ns/%s", _pid_, _ns_); \
-  readlink(__filename, __buf, 64); \
+  ssize_t __n = readlink(__filename, __buf, 64); \
+  __buf[__n] = '\0'; \
   ldebug("%d: %s\n", _pid_, __buf); \
 } while (0)
-
-
-static struct env_attrs {
-  const char *name;
-  const char *value;
-  int overwrite;
-} container_env[] = {
-  {"PATH", "/usr/bin:/usr/local/bin:/usr/local/sbin:/bin:/sbin", 1},
-};
 
 
 struct container_arg {
@@ -55,20 +48,15 @@ child_awake(struct container_arg *arg) {
 
 
 static int
-run(void *arg) {
-  ldebug("Container start.\n");
-
-  struct container_arg *carg = (struct container_arg *)arg;
-  close(carg->pipefd[1]);
-  child_wait(carg);
-
-  int opt;
+parse_arg(int argc, char **argv, char *path) {
   int len = 0;
+  int opt;
   char buf[128];
-  char path[128] = {0};
-  while ((opt = getopt(carg->argc, carg->argv, "+n:m:p:e:")) != -1) {
+
+  path[0] = '\0';
+  while ((opt = getopt(argc, argv, "+n:m:p:e:h:")) != -1) {
     switch (opt) {
-      case 'n':
+      case 'h':
         if (sethostname(optarg, strlen(optarg)) == -1) {
           lperror("hostname");
           return 1;
@@ -87,6 +75,7 @@ run(void *arg) {
         for (int i = 0; i < strlen(optarg); ++i) {
           if (optarg[i] == ':') {
             strncpy(buf, optarg, i);
+            buf[i] = '\0';
             strcpy(path + len, optarg + i + 1);
 
             const char *src = buf;
@@ -108,18 +97,45 @@ run(void *arg) {
         }
         break;
       case 'e':
+        for (int i = 0; i < strlen(optarg); ++i) {
+          if (optarg[i] == '=') {
+            strncpy(buf, optarg, i);
+            buf[i] = '\0';
+
+            const char *name = buf;
+            const char *value = optarg + i + 1;
+
+            setenv(name, value, 1);
+          }
+        }
         break;
       default:
         return 1;
     }
   }
   path[len] = '\0';
+  return 0;
+}
+
+
+static int
+run(void *arg) {
+  ldebug("Container start.\n");
+
+  struct container_arg *carg = (struct container_arg *)arg;
+  close(carg->pipefd[1]);
+  child_wait(carg);
+
+  list_caps;
+  char path[128];
+  if (parse_arg(carg->argc, carg->argv, path) != 0) {
+    return 1;
+  }
 
   // cap_t caps = cap_from_text("all= cap_sys_admin-e cap_net_raw+ep");
   // cap_t caps = cap_from_text("all+ep cap_net_raw-ep");
   // cap_set_proc(caps);
   // cap_free(caps);
-  list_caps;
 
   if (mount_fs(path) != 0) {
     return 1;
@@ -128,14 +144,6 @@ run(void *arg) {
     lperror("chdir/chroot");
     return 1;
   }
-
-  size_t n = sizeof(container_env) / sizeof(struct env_attrs);
-  for (int i = 0; i < n; ++i) {
-    struct env_attrs *e = container_env + i;
-    setenv(e->name, e->value, e->overwrite);
-  }
-
-  system("/bin/ping -c 1 baidu.com");
 
   char *cmd[] = {
     "/bin/bash",
@@ -151,6 +159,7 @@ run(void *arg) {
 int
 container_run(int argc, char **argv) {
   ldebug("Start.\n");
+  pid_t self = getpid();
 
   struct container_arg carg = {
     .argc = argc,
@@ -161,11 +170,13 @@ container_run(int argc, char **argv) {
     return 1;
   }
 
+  get_ns(self, "net");
+  netns_switch("ns1");
+
   u_int8_t stack[STACK_SIZE];
-  pid_t self = getpid();
   pid_t container_pid = clone(run, stack + STACK_SIZE,
                               CLONE_NEWNS     // Mount namespaces
-                              | CLONE_NEWNET  // Network namespaces
+                              // | CLONE_NEWNET  // Network namespaces
                               | CLONE_NEWUSER // User namespaces
                               | CLONE_NEWIPC  // IPC namespaces
                               | CLONE_NEWPID  // PID namespaces
@@ -185,8 +196,8 @@ container_run(int argc, char **argv) {
   close(carg.pipefd[0]);
   child_awake(&carg);
 
-  get_ns(self, "pid");
-  get_ns(container_pid, "pid");
+  get_ns(self, "net");
+  get_ns(container_pid, "net");
 
   waitpid(container_pid, NULL, 0);
   close(carg.pipefd[1]);

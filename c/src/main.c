@@ -4,8 +4,10 @@
 #include "capability.h"
 #include "container.h"
 #include "mount.h"
+#include "netns.h"
 #include <sched.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <sys/wait.h>
 
 #define STACK_SIZE (1024 * 1024)
@@ -18,7 +20,18 @@ run(void *arg) {
 
 
 int
+test_ns() {
+  netns_switch("ns1");
+  system("ip addr");
+
+  return 0;
+}
+
+
+int
 main(int argc, char **argv) {
+  // return test_ns();
+
   return container_run(argc, argv);
 
   // char stack[STACK_SIZE];

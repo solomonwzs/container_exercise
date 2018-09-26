@@ -28,6 +28,7 @@ pre:
 
 test: all
 	@$(BUILD_PATH)/main \
-		-n "container" \
+		-h "container" \
 		-p "$(BASESYS_PATH)" \
-		-m "./sh/network.sh:usr/local/bin/network.sh"
+		-m "./sh/network.sh:usr/local/bin/network.sh" \
+		-e "PATH=/usr/bin:/usr/local/bin:/usr/local/sbin:/bin:/sbin"
