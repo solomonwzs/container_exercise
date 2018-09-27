@@ -23,6 +23,7 @@ int
 test_ns() {
   netns_switch("ns1");
   system("ip addr");
+  system("ping -c 1 127.0.0.1");
 
   return 0;
 }

@@ -145,6 +145,9 @@ run(void *arg) {
     return 1;
   }
 
+  check_cap_net_raw;
+  system("ping -c 1 127.0.0.1");
+
   char *cmd[] = {
     "/bin/bash",
     NULL
@@ -170,13 +173,13 @@ container_run(int argc, char **argv) {
     return 1;
   }
 
-  get_ns(self, "net");
-  netns_switch("ns1");
+  // get_ns(self, "net");
+  // netns_switch("ns1");
 
   u_int8_t stack[STACK_SIZE];
   pid_t container_pid = clone(run, stack + STACK_SIZE,
                               CLONE_NEWNS     // Mount namespaces
-                              // | CLONE_NEWNET  // Network namespaces
+                              | CLONE_NEWNET  // Network namespaces
                               | CLONE_NEWUSER // User namespaces
                               | CLONE_NEWIPC  // IPC namespaces
                               | CLONE_NEWPID  // PID namespaces
