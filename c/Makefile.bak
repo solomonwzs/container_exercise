@@ -1,7 +1,7 @@
 .SUFFIXES: .c
 
 C			= gcc
-CFLAGS		= -Wall -fpic -g -c
+CFLAGS		= -Wall -fpic -g -c -I./include
 LIBS		= -lcap
 ALL_SRC		= $(wildcard src/*.c)
 
