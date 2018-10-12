@@ -179,8 +179,8 @@ container_run(int argc, char **argv) {
   u_int8_t stack[STACK_SIZE];
   pid_t container_pid = clone(run, stack + STACK_SIZE,
                               CLONE_NEWNS     // Mount namespaces
-                              | CLONE_NEWNET  // Network namespaces
-                              | CLONE_NEWUSER // User namespaces
+                              // | CLONE_NEWNET  // Network namespaces
+                              // | CLONE_NEWUSER // User namespaces
                               | CLONE_NEWIPC  // IPC namespaces
                               | CLONE_NEWPID  // PID namespaces
                               | CLONE_NEWUTS  // UTS namespaces
@@ -193,8 +193,8 @@ container_run(int argc, char **argv) {
   }
   ldebug("Container PID: %d\n", container_pid);
 
-  set_uid_map(container_pid, 0, getuid(), 1);
-  set_gid_map(container_pid, 0, getgid(), 1);
+  // set_uid_map(container_pid, 0, getuid(), 1);
+  // set_gid_map(container_pid, 0, getgid(), 1);
 
   close(carg.pipefd[0]);
   child_awake(&carg);

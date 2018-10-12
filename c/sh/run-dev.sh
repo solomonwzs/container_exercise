@@ -9,10 +9,18 @@ set -euo pipefail
 
 SCRIPT=$(readlink -f "$0")
 DIR=$(dirname "$SCRIPT")
+SRC_DIR="${DIR}/../"
+BUILD_DIR="${DIR}/../build"
 
 BASESYS_PATH=/home/solomon/workspace/basesystem/ubuntu_xenial_1604/
 
-"${DIR}/../build/container-test" \
+cd "${BUILD_DIR}"
+
+cmake "$SRC_DIR"
+
+make
+
+"${BUILD_DIR}/container-test" \
     -h "container" \
     -p "${BASESYS_PATH}" \
     -m "${DIR}/network.sh:/usr/local/bin/network.sh" \
