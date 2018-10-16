@@ -173,8 +173,8 @@ container_run(int argc, char **argv) {
     return 1;
   }
 
-  // get_ns(self, "net");
-  // netns_switch("ns1");
+  get_ns(self, "net");
+  netns_switch("ns1");
 
   u_int8_t stack[STACK_SIZE];
   pid_t container_pid = clone(run, stack + STACK_SIZE,
@@ -193,14 +193,14 @@ container_run(int argc, char **argv) {
   }
   ldebug("Container PID: %d\n", container_pid);
 
-  // set_uid_map(container_pid, 0, getuid(), 1);
-  // set_gid_map(container_pid, 0, getgid(), 1);
+  set_uid_map(container_pid, 0, getuid(), 1);
+  set_gid_map(container_pid, 0, getgid(), 1);
 
   close(carg.pipefd[0]);
   child_awake(&carg);
 
-  get_ns(self, "net");
-  get_ns(container_pid, "net");
+  // get_ns(self, "net");
+  // get_ns(container_pid, "net");
 
   waitpid(container_pid, NULL, 0);
   close(carg.pipefd[1]);
