@@ -1,6 +1,6 @@
 {
     "bridge": "my-bridge",
-    "mark": "255.255.255.0",
+    "route": "172.20.0.1",
     "namespaces": {
         "my-ns-0": {
             "ip": "172.20.0.10"

@@ -12,12 +12,12 @@ EXECUTE_DIRNAME=$(dirname "$EXECUTE_FILENAME")
 
 source "${EXECUTE_DIRNAME}/common.sh"
 
-while getopts "n:i:c:" opt; do
+while getopts "n:p:c:" opt; do
     case "${opt}" in
         n)
             network_ns=${OPTARG}
             ;;
-        i)
+        p)
             veth_ip=${OPTARG}
             ;;
         c)
@@ -57,17 +57,17 @@ function delete() {
 }
 
 function create() {
+    # create bridge
+    ip link add name "$bridge_name" type bridge
+    ip addr add "$bridge_addr" brd + dev "$bridge_name"
+    ip link set "$bridge_name" up
+
     # create network namespace
     ip netns add "$network_ns"
 
     # create a pair of veths
     ip link add "$veth_A" type veth peer name "$veth_B"
     ip link set "$veth_B" netns "$network_ns"
-
-    # create bridge
-    ip link add name "$bridge_name" type bridge
-    ip addr add "$bridge_addr" brd + dev "$bridge_name"
-    ip link set "$bridge_name" up
 
     # add veth to bridge
     ip link set "$veth_A" master "$bridge_name"
