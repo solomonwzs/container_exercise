@@ -12,7 +12,7 @@ EXECUTE_DIRNAME=$(dirname "$EXECUTE_FILENAME")
 
 source "${EXECUTE_DIRNAME}/common.sh"
 
-while getopts "n:p:c:i:m:a:" opt; do
+while getopts "n:p:c:i:m:a:g:" opt; do
     case "${opt}" in
         n)
             network_ns=${OPTARG}
@@ -31,6 +31,9 @@ while getopts "n:p:c:i:m:a:" opt; do
             ;;
         a)
             vname=${OPTARG}
+            ;;
+        g)
+            gateway_ip=${OPTARG}
             ;;
         *)
             ;;
@@ -73,6 +76,9 @@ function create() {
         ip addr add "$vlan_addr" brd + dev "$vname"
     ip netns exec "$network_ns" \
         ip link set "$vname" up
+
+    ip netns exec "$network_ns" \
+        ip route add default via "$gateway_ip"
 
     iptables \
         -t nat \
