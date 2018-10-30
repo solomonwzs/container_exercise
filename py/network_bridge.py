@@ -6,33 +6,17 @@
 # @version  1.0
 # @license  MIT
 
-from subprocess import (
-    Popen,
-    PIPE,
-)
+from common_util import commands
 from ipaddress import IPv4Address
-import logging
-import json
 import argparse
+import json
+import logging
 
 
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)-15s [%(levelname)s] [%(filename)s:%(lineno)d]%(message)s'
 )
-
-
-def commands(cmds):
-    for cmd in cmds:
-        logging.debug(f"\033[1;32m{cmd}\033[0m")
-        p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-        output, err = p.communicate()
-        if p.returncode != 0:
-            logging.error(err)
-            return False
-        elif len(output) != 0:
-            logging.debug(output)
-    return True
 
 
 def create_namespace_network(bridge_name, route_ip, network_ns, veth_ip):
