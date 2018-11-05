@@ -1,3 +1,13 @@
 name = "container-test-0"
 
 hostname = "container-test-0"
+
+env = ["PATH=/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/bin:/sbin"]
+
+[base_system]
+
+dir = "/home/solomon/workspace/basesystem"
+
+system = "ubuntu_xenial_1604"
+
+workspace = "/home/solomon/workspace/basesystem/ws"
