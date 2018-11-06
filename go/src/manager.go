@@ -1,18 +1,28 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"syscall"
 )
 
-type MainManager struct {
+type MainServer struct {
 	uniquid uint64
-	fd      *os.File
+	rwc     io.ReadWriteCloser
 }
 
-type ContainerManager struct {
-	uniquid uint64
-	fd      *os.File
+func SystemCmd(cmd string, arg ...string) (err error) {
+	c := exec.Command(cmd, arg...)
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	if err = c.Run(); err != nil {
+		return
+	}
+	c.Wait()
+	return
 }
 
 func NewSocketpair() (f0, f1 *os.File, err error) {
@@ -20,7 +30,17 @@ func NewSocketpair() (f0, f1 *os.File, err error) {
 	if err != nil {
 		return nil, nil, os.NewSyscallError("socketpair", err)
 	}
-	f0 = os.NewFile(uintptr(fds[0]), "socketpair-0")
-	f1 = os.NewFile(uintptr(fds[1]), "socketpair-1")
+	f0 = os.NewFile(uintptr(fds[0]), fmt.Sprintf("socketpair-%d", fds[0]))
+	f1 = os.NewFile(uintptr(fds[1]), fmt.Sprintf("socketpair-%d", fds[1]))
+	return
+}
+
+func NewPipe() (rFs, wFs *os.File, err error) {
+	fds := make([]int, 2)
+	if err = syscall.Pipe(fds); err != nil {
+		return nil, nil, os.NewSyscallError("pipe", err)
+	}
+	rFs = os.NewFile(uintptr(fds[0]), fmt.Sprintf("pipe-r-%d", fds[0]))
+	wFs = os.NewFile(uintptr(fds[1]), fmt.Sprintf("pipe-w-%d", fds[1]))
 	return
 }

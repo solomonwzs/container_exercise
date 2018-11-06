@@ -17,3 +17,6 @@ func NamespacesID(ns string) string {
 	}
 	return ""
 }
+
+func EnterNamespaces() {
+}

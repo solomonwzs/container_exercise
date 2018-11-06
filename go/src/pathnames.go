@@ -9,10 +9,34 @@ const (
 	_PATH_PROC_GID_MAP   = "/proc/self/uid_map"
 )
 
-func procUidMap(pid int) string {
+func PathProcUidMap(pid int) string {
 	return fmt.Sprintf("/proc/%d/uid_map", pid)
 }
 
-func procGidMap(pid int) string {
+func PathProcGidMap(pid int) string {
 	return fmt.Sprintf("/proc/%d/gid_map", pid)
+}
+
+func PathProcNsIPC(pid int) string {
+	return fmt.Sprintf("/proc/%d/ns/ipc", pid)
+}
+
+func PathProcNsMount(pid int) string {
+	return fmt.Sprintf("/proc/%d/ns/mnt", pid)
+}
+
+func PathProcNsNet(pid int) string {
+	return fmt.Sprintf("/proc/%d/ns/net", pid)
+}
+
+func PathProcNsPid(pid int) string {
+	return fmt.Sprintf("/proc/%d/ns/pid", pid)
+}
+
+func PathProcNsUTS(pid int) string {
+	return fmt.Sprintf("/proc/%d/ns/uts", pid)
+}
+
+func PathProcNsUser(pid int) string {
+	return fmt.Sprintf("/proc/%d/ns/user", pid)
 }

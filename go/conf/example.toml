@@ -1,13 +1,16 @@
 name = "container-test-0"
-
 hostname = "container-test-0"
-
-env = ["PATH=/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/bin:/sbin"]
+env = [
+"PATH=/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/bin:/sbin",
+"TERM=xterm-256color"
+]
 
 [base_system]
-
 dir = "/home/solomon/workspace/basesystem"
-
 system = "ubuntu_xenial_1604"
-
 workspace = "/home/solomon/workspace/basesystem/ws"
+
+[[network]]
+type = "bridge"
+mark = "255.255.255.0"
+ip = "172.20.1.11"

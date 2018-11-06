@@ -4,12 +4,15 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sync/atomic"
+	"strconv"
 	"syscall"
-	"unsafe"
 
 	"github.com/BurntSushi/toml"
 	"github.com/solomonwzs/goxutil/logger"
+)
+
+const (
+	_BRANCH_CONTAINER = "container"
 )
 
 func init() {
@@ -17,20 +20,39 @@ func init() {
 		fmt.Printf("%s", r)
 	})
 
-	RegisterBranchCommand("container", containerRun)
-	if ExecBranch() {
+	switch os.Args[0] {
+	case _BRANCH_CONTAINER:
+		containerRun()
 		os.Exit(0)
+	default:
 	}
 }
 
-func main() {
-	f0, f1, err := NewSocketpair()
+func UidMap(pid, idInsideNs, idOutsideNs, mapRange int) (err error) {
+	f, err := os.OpenFile(PathProcUidMap(pid), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		panic(err)
+		return
 	}
-	defer f0.Close()
-	defer f1.Close()
+	defer f.Close()
 
+	_, err = f.WriteString(fmt.Sprintf("%d %d %d",
+		idInsideNs, idOutsideNs, mapRange))
+	return
+}
+
+func GidMap(pid, idInsideNs, idOutsideNs, mapRange int) (err error) {
+	f, err := os.OpenFile(PathProcGidMap(pid), os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(fmt.Sprintf("%d %d %d",
+		idInsideNs, idOutsideNs, mapRange))
+	return
+}
+
+func main() {
 	var conf Configuration
 	var filename string
 	flag.StringVar(&filename, "f", "", "config filename")
@@ -38,38 +60,42 @@ func main() {
 	if _, err := toml.DecodeFile(filename, &conf); err != nil {
 		panic(err)
 	}
+	logger.Debugf("%+v\n", conf)
 
-	var args = os.Args
-	args[0] = "container"
-
-	cmd := BranchCommand(args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	// cmd.ExtraFiles = []*os.File{f1}
-	cmd.SysProcAttr.Cloneflags = syscall.CLONE_NEWPID |
-		syscall.CLONE_NEWNS |
-		syscall.CLONE_NEWUTS |
-		syscall.CLONE_NEWIPC |
-		syscall.CLONE_NEWNET
-
-	if err := cmd.Start(); err != nil {
+	f0, f1, err := NewSocketpair()
+	if err != nil {
 		panic(err)
 	}
-	logger.Debug(cmd.Process.Pid)
+	defer f0.Close()
+	defer f1.Close()
 
-	buf := make([]byte, SIZEOF_PROTO_IN_HEADER)
-	inHeader := (*ProtoInHeader)(unsafe.Pointer(&buf[0]))
-	inHeader.Len = 0
-	inHeader.OpCode = OP_NOTIFY
-	inHeader.Unique = atomic.AddUint64(&ProtoReqId, 1)
-	logger.Debug(f0.Write(buf))
+	process, err := os.StartProcess(
+		_PATH_PROC_BINARY,
+		[]string{_BRANCH_CONTAINER, filename, strconv.Itoa(int(f1.Fd()))},
+		&os.ProcAttr{
+			Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+			Sys: &syscall.SysProcAttr{
+				Pdeathsig: syscall.SIGTERM,
+				Cloneflags: syscall.CLONE_NEWPID |
+					syscall.CLONE_NEWNS |
+					syscall.CLONE_NEWUTS |
+					syscall.CLONE_NEWIPC |
+					syscall.CLONE_NEWNET,
+			},
+		})
+	if err != nil {
+		panic(err)
+	}
+
+	BuildNetworks(process.Pid, &conf)
+
+	f0.Write([]byte{0})
 
 	defer func() {
 		ReleaseBaseFiles(&conf)
 	}()
 
-	if err := cmd.Wait(); err != nil {
+	if _, err = process.Wait(); err != nil {
 		panic(err)
 	}
 }

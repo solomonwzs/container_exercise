@@ -1,34 +1,60 @@
 package main
 
 import (
-	"flag"
+	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"syscall"
 
 	"github.com/BurntSushi/toml"
-	"github.com/solomonwzs/goxutil/logger"
+	"github.com/solomonwzs/goxutil/closer"
 )
 
-const _MGR_FD = 4
+type ContainerServer struct {
+	closer.Closer
+	uniquid  uint64
+	conf     *Configuration
+	rwc      io.ReadWriteCloser
+	callback map[uint64]ProtoFuncCallback
+}
+
+func NewContainerServer(rwc io.ReadWriteCloser, conf *Configuration) (
+	s *ContainerServer) {
+	s = &ContainerServer{
+		uniquid: 0,
+		conf:    conf,
+		rwc:     rwc,
+	}
+	s.Closer = closer.NewCloser(func() error {
+		return s.rwc.Close()
+	})
+	return
+}
+
+func (s *ContainerServer) Serv() {
+	buf := make([]byte, _MAX_PROTO_REQ_SIZE)
+	for {
+		_, err := s.rwc.Read(buf)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
 
 func containerRun() {
-	fd := os.NewFile(uintptr(_MGR_FD), "mgr_socket")
-	defer fd.Close()
-
-	buf := make([]byte, SIZEOF_PROTO_IN_HEADER)
-	if _, err := fd.Read(buf); err != nil {
-		logger.Error(err)
-	}
-	logger.Debug(buf)
-
+	filename := os.Args[1]
+	fd, _ := strconv.Atoi(os.Args[2])
 	var conf Configuration
-	var filename string
-	flag.StringVar(&filename, "f", "", "config filename")
-	flag.Parse()
 	if _, err := toml.DecodeFile(filename, &conf); err != nil {
 		panic(err)
 	}
+
+	mgrs := os.NewFile(uintptr(fd), "mgrs")
+	defer mgrs.Close()
+
+	buf := make([]byte, 1)
+	mgrs.Read(buf)
 
 	// mount
 	if err := BuildBaseFiles(&conf); err != nil {
