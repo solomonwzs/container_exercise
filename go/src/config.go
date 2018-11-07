@@ -15,7 +15,8 @@ type CBaseSystem struct {
 }
 
 type CNetwork struct {
+	Name string `toml:"name"`
 	Type string `toml:"type"`
-	Mark string `toml:"mark"`
-	Ip   string `toml:"ip"`
+	Mask string `toml:"mask"`
+	IP   string `toml:"ip"`
 }

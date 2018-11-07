@@ -11,6 +11,13 @@ system = "ubuntu_xenial_1604"
 workspace = "/home/solomon/workspace/basesystem/ws"
 
 [[network]]
+name = "eno0"
 type = "bridge"
-mark = "255.255.255.0"
+mask = "255.255.255.0"
 ip = "172.20.1.11"
+
+[[network]]
+name = "eno1"
+type = "bridge"
+mask = "255.255.255.0"
+ip = "172.20.2.11"

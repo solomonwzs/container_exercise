@@ -25,6 +25,9 @@ var mountList = []mountArgs{
 	mountArgs{"devpts", "dev/pts", "devpts", 0, ""},
 	mountArgs{"shm", "dev/shm", "tmpfs", 0, ""},
 	mountArgs{"tmpfs", "run", "tmpfs", 0, ""},
+
+	mountArgs{"/etc/hosts", "etc/hosts", "none", syscall.MS_BIND, ""},
+	mountArgs{"/etc/resolv.conf", "etc/resolv.conf", "none", syscall.MS_BIND, ""},
 }
 
 func BuildBaseFiles(conf *Configuration) (err error) {

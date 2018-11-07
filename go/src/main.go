@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"os"
@@ -87,15 +88,27 @@ func main() {
 		panic(err)
 	}
 
-	BuildNetworks(process.Pid, &conf)
+	networkBuilders := ParserNetworkBuilders(process.Pid, conf)
+	for _, builder := range networkBuilders {
+		builder.BuildNetwork()
+	}
 
-	f0.Write([]byte{0})
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, uint32(process.Pid))
+	f0.Write(buf)
 
 	defer func() {
 		ReleaseBaseFiles(&conf)
+		for _, builder := range networkBuilders {
+			builder.ReleaseNetwork()
+		}
 	}()
 
 	if _, err = process.Wait(); err != nil {
 		panic(err)
 	}
+}
+
+func releaseContainerResource(conf *Configuration) {
+	ReleaseBaseFiles(conf)
 }

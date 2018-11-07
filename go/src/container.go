@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"io"
 	"os"
 	"os/exec"
@@ -53,8 +54,14 @@ func containerRun() {
 	mgrs := os.NewFile(uintptr(fd), "mgrs")
 	defer mgrs.Close()
 
-	buf := make([]byte, 1)
+	buf := make([]byte, 4)
 	mgrs.Read(buf)
+	pid := int(binary.BigEndian.Uint32(buf))
+
+	networkBuilders := ParserNetworkBuilders(pid, conf)
+	for _, builder := range networkBuilders {
+		builder.SetupNetwork()
+	}
 
 	// mount
 	if err := BuildBaseFiles(&conf); err != nil {

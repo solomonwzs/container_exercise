@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+
+	"github.com/solomonwzs/goxutil/logger"
 )
 
 type MainServer struct {
@@ -14,6 +16,7 @@ type MainServer struct {
 }
 
 func SystemCmd(cmd string, arg ...string) (err error) {
+	logger.Debug(cmd, arg)
 	c := exec.Command(cmd, arg...)
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
