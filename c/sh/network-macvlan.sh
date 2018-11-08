@@ -42,18 +42,18 @@ done
 
 vlan_addr="${vlan_ip}/24"
 
-mark="255.255.255.0"
-mark_dec=$(ipv42dec "$mark")
+mask="255.255.255.0"
+mask_dec=$(ipv42dec "$mask")
 vlan_ip_dec=$(ipv42dec "$vlan_ip")
 
-rule_src="$(dec2ipv4 $(( vlan_ip_dec & mark_dec)))/24"
+rule_src="$(dec2ipv4 $(( vlan_ip_dec & mask_dec)))/24"
 
 function delete() {
-    iptables \
-        -t nat \
-        -D POSTROUTING \
-        -s "$rule_src" \
-        -j MASQUERADE || true
+    # iptables \
+    #     -t nat \
+    #     -D POSTROUTING \
+    #     -s "$rule_src" \
+    #     -j MASQUERADE || true
 
     ip netns exec "$network_ns" \
         ip link delete "$vname" || true
@@ -80,11 +80,11 @@ function create() {
     ip netns exec "$network_ns" \
         ip route add default via "$gateway_ip"
 
-    iptables \
-        -t nat \
-        -A POSTROUTING \
-        -s "$rule_src" \
-        -j MASQUERADE || true
+    # iptables \
+    #     -t nat \
+    #     -A POSTROUTING \
+    #     -s "$rule_src" \
+    #     -j MASQUERADE || true
 }
 
 function test_ns() {

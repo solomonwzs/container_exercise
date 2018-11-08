@@ -58,10 +58,12 @@ func containerRun() {
 	mgrs.Read(buf)
 	pid := int(binary.BigEndian.Uint32(buf))
 
+	// set network
 	networkBuilders := ParserNetworkBuilders(pid, conf)
 	for _, builder := range networkBuilders {
 		builder.SetupNetwork()
 	}
+	AddNetworkRoutes(conf.Network.Routes)
 
 	// mount
 	if err := BuildBaseFiles(&conf); err != nil {

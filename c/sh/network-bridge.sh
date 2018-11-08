@@ -32,15 +32,15 @@ veth_A="${network_ns}-veth-A"
 veth_B="${network_ns}-veth-B"
 bridge_name="${network_ns}-bridge"
 
-mark="255.255.255.0"
-mark_dec=$(ipv42dec "$mark")
+mask="255.255.255.0"
+mask_dec=$(ipv42dec "$mask")
 veth_ip_dec=$(ipv42dec "$veth_ip")
 
-route_ip=$(dec2ipv4 $(( veth_ip_dec & mark_dec | 1 )))
+route_ip=$(dec2ipv4 $(( veth_ip_dec & mask_dec | 1 )))
 bridge_addr="${route_ip}/24"
 veth_addr="${veth_ip}/24"
 
-rule_src="$(dec2ipv4 $(( veth_ip_dec & mark_dec)))/24"
+rule_src="$(dec2ipv4 $(( veth_ip_dec & mask_dec)))/24"
 
 function delete() {
     # sysctl -w net.ipv4.ip_forward=0

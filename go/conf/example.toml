@@ -10,14 +10,27 @@ dir = "/home/solomon/workspace/basesystem"
 system = "ubuntu_xenial_1604"
 workspace = "/home/solomon/workspace/basesystem/ws"
 
-[[network]]
+[[mount]]
+src = "/home/solomon/workspace"
+target = "/root/workspace"
+
+[network]
+
+[[network.interface]]
 name = "eno0"
 type = "bridge"
 mask = "255.255.255.0"
 ip = "172.20.1.11"
 
-[[network]]
+[[network.interface]]
 name = "eno1"
-type = "bridge"
+type = "macvlan"
+host_interface = "eno1"
+mode = "bridge"
 mask = "255.255.255.0"
-ip = "172.20.2.11"
+ip = "192.168.197.131"
+
+[[network.route]]
+dest = "0.0.0.0"
+mask = "0.0.0.0"
+gateway = "192.168.197.252"

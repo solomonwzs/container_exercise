@@ -91,18 +91,14 @@ func main() {
 	networkBuilders := ParserNetworkBuilders(process.Pid, conf)
 	for _, builder := range networkBuilders {
 		builder.BuildNetwork()
+		defer builder.ReleaseNetwork()
 	}
 
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, uint32(process.Pid))
 	f0.Write(buf)
 
-	defer func() {
-		ReleaseBaseFiles(&conf)
-		for _, builder := range networkBuilders {
-			builder.ReleaseNetwork()
-		}
-	}()
+	defer ReleaseBaseFiles(&conf)
 
 	if _, err = process.Wait(); err != nil {
 		panic(err)

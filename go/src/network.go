@@ -18,34 +18,70 @@ type NetworkBuilder interface {
 }
 
 func ParserNetworkBuilders(cPid int, conf Configuration) []NetworkBuilder {
-	nb := make([]NetworkBuilder, len(conf.Networks))
-	for i, netConf := range conf.Networks {
+	nb := make([]NetworkBuilder, 0)
+	for _, netConf := range conf.Network.Interfaces {
 		switch netConf.Type {
 		case "bridge":
-			nb[i] = NewCNetworkBridge(cPid, netConf)
+			nb = append(nb, NewCNIBridge(cPid, netConf))
+		case "macvlan":
+			nb = append(nb, NewCNIMacvlan(cPid, netConf))
 		default:
-			nb[i] = nil
 		}
 	}
 	return nb
 }
 
-type CNetworkBridge struct {
+func Ipv42Dec(ip net.IP) (uint32, error) {
+	if tmp := ip.To4(); tmp != nil {
+		return binary.BigEndian.Uint32(tmp), nil
+	}
+	return 0, errors.New("not IPv4 address")
+}
+
+func Dec2Ipv4(dec uint32) net.IP {
+	ip := make(net.IP, 4)
+	binary.BigEndian.PutUint32(ip, dec)
+	return ip
+}
+
+func MaskValidBits(mask net.IP) int {
+	if tmp := mask.To4(); tmp != nil {
+		dec := binary.LittleEndian.Uint32(tmp)
+		n := 0
+		for ; dec&1 != 0; dec >>= 1 {
+			n += 1
+		}
+		return n
+	}
+	return 0
+}
+
+func AddNetworkRoutes(routes []CNetworkRoute) (err error) {
+	for _, route := range routes {
+		mask := net.ParseIP(route.Mask)
+		maskValidBits := MaskValidBits(mask)
+		dest := fmt.Sprintf("%s/%d", route.Dest, maskValidBits)
+
+		SystemCmd("ip", "route", "add", dest, "via", route.Gateway)
+	}
+	return
+}
+
+type CNIBridge struct {
 	BridgeAddr string
 	BridgeName string
-	DevName    string
+	Name       string
 	Pid        string
-	RouteIP    string
 	RuleSrc    string
 	VethA      string
 	VethAddr   string
 	VethB      string
 }
 
-func NewCNetworkBridge(cPid int, conf CNetwork) CNetworkBridge {
+func NewCNIBridge(cPid int, conf CNetworkInterface) CNIBridge {
 	devid := atomic.AddUint32(&devUniqID, 1)
-
 	pid := strconv.Itoa(cPid)
+
 	bridgeName := fmt.Sprintf("bridge%s-%d", pid, devid)
 	vethA := fmt.Sprintf("veth%s-%d", pid, devid)
 	vethB := fmt.Sprintf("veth%sx-%d", pid, devid)
@@ -56,18 +92,17 @@ func NewCNetworkBridge(cPid int, conf CNetwork) CNetworkBridge {
 	ip := net.ParseIP(conf.IP)
 	ipDec, _ := Ipv42Dec(ip)
 
-	routeIP := Dec2Ipv4(ipDec&maskDec | 1)
-	bridgeAddr := fmt.Sprintf("%s/%d", routeIP, maskValidBits)
+	bridgeIP := Dec2Ipv4(ipDec&maskDec | 1)
+	bridgeAddr := fmt.Sprintf("%s/%d", bridgeIP, maskValidBits)
 	vethAddr := fmt.Sprintf("%s/%d", ip, maskValidBits)
 
 	ruleSrc := fmt.Sprintf("%s/%d", Dec2Ipv4(ipDec&maskDec), maskValidBits)
 
-	return CNetworkBridge{
+	return CNIBridge{
 		BridgeAddr: bridgeAddr,
 		BridgeName: bridgeName,
-		DevName:    conf.Name,
+		Name:       conf.Name,
 		Pid:        pid,
-		RouteIP:    fmt.Sprintf("%s", routeIP),
 		RuleSrc:    ruleSrc,
 		VethA:      vethA,
 		VethAddr:   vethAddr,
@@ -75,7 +110,7 @@ func NewCNetworkBridge(cPid int, conf CNetwork) CNetworkBridge {
 	}
 }
 
-func (conf CNetworkBridge) BuildNetwork() (err error) {
+func (conf CNIBridge) BuildNetwork() (err error) {
 	// create bridge
 	SystemCmd("ip", "link",
 		"add", conf.BridgeName, "type", "bridge")
@@ -107,7 +142,7 @@ func (conf CNetworkBridge) BuildNetwork() (err error) {
 	return
 }
 
-func (conf CNetworkBridge) ReleaseNetwork() (err error) {
+func (conf CNIBridge) ReleaseNetwork() (err error) {
 	SystemCmd("iptables",
 		"-t", "nat",
 		"-D", "POSTROUTING",
@@ -119,36 +154,61 @@ func (conf CNetworkBridge) ReleaseNetwork() (err error) {
 	return
 }
 
-func (conf CNetworkBridge) SetupNetwork() (err error) {
+func (conf CNIBridge) SetupNetwork() (err error) {
 	SystemCmd("ip", "link", "set", "lo", "up")
-	SystemCmd("ip", "link", "set", conf.VethB, "name", conf.DevName)
-	SystemCmd("ip", "link", "set", conf.DevName, "up")
-	SystemCmd("ip", "addr", "add", conf.VethAddr, "dev", conf.DevName)
-	SystemCmd("ip", "route", "add", "default", "via", conf.RouteIP)
+	SystemCmd("ip", "link", "set", conf.VethB, "name", conf.Name)
+	SystemCmd("ip", "link", "set", conf.Name, "up")
+	SystemCmd("ip", "addr", "add", conf.VethAddr, "dev", conf.Name)
 	return
 }
 
-func Ipv42Dec(ip net.IP) (uint32, error) {
-	if tmp := ip.To4(); tmp != nil {
-		return binary.BigEndian.Uint32(tmp), nil
-	}
-	return 0, errors.New("not IPv4 address")
+type CNIMacvlan struct {
+	HostInterface string
+	Name          string
+	VName         string
+	Pid           string
+	Mode          string
+	Addr          string
 }
 
-func Dec2Ipv4(dec uint32) net.IP {
-	ip := make(net.IP, 4)
-	binary.BigEndian.PutUint32(ip, dec)
-	return ip
+func NewCNIMacvlan(cPid int, conf CNetworkInterface) CNIMacvlan {
+	devid := atomic.AddUint32(&devUniqID, 1)
+	pid := strconv.Itoa(cPid)
+
+	vname := fmt.Sprintf("macv%s-%d", pid, devid)
+
+	mask := net.ParseIP(conf.Mask)
+	maskValidBits := MaskValidBits(mask)
+	ip := net.ParseIP(conf.IP)
+
+	addr := fmt.Sprintf("%s/%d", ip, maskValidBits)
+
+	return CNIMacvlan{
+		HostInterface: conf.HostInterface,
+		Mode:          conf.Mode,
+		Pid:           pid,
+		Name:          conf.Name,
+		VName:         vname,
+		Addr:          addr,
+	}
 }
 
-func MaskValidBits(mask net.IP) int {
-	if tmp := mask.To4(); tmp != nil {
-		dec := binary.LittleEndian.Uint32(tmp)
-		n := 0
-		for ; dec&1 != 0; dec >>= 1 {
-			n += 1
-		}
-		return n
-	}
-	return 0
+func (conf CNIMacvlan) BuildNetwork() (err error) {
+	SystemCmd("ip", "link",
+		"add", "link", conf.HostInterface, "name", conf.VName,
+		"type", "macvlan", "mode", conf.Mode)
+	SystemCmd("ip", "link",
+		"set", conf.VName, "netns", conf.Pid)
+	return
+}
+
+func (conf CNIMacvlan) ReleaseNetwork() (err error) { return }
+
+func (conf CNIMacvlan) SetupNetwork() (err error) {
+	SystemCmd("ip", "link", "set", "lo", "up")
+	SystemCmd("ip", "link", "set", conf.VName, "name", conf.Name)
+	SystemCmd("ip", "link", "set", conf.Name, "up")
+	SystemCmd("ip", "addr", "add", conf.Addr, "dev", conf.Name)
+
+	return
 }
