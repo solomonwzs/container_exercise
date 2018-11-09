@@ -10,6 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/solomonwzs/goxutil/closer"
+	"github.com/solomonwzs/goxutil/logger"
 )
 
 type ContainerServer struct {
@@ -54,6 +55,8 @@ func containerRun() {
 	mgrs := os.NewFile(uintptr(fd), "mgrs")
 	defer mgrs.Close()
 
+	SystemCmd("id")
+
 	buf := make([]byte, 4)
 	mgrs.Read(buf)
 	pid := int(binary.BigEndian.Uint32(buf))
@@ -67,12 +70,14 @@ func containerRun() {
 
 	// mount
 	if err := BuildBaseFiles(&conf); err != nil {
-		panic(err)
+		logger.Error(err)
+		// panic(err)
 	}
 
 	// set hostname
 	if err := syscall.Sethostname([]byte(conf.Hostname)); err != nil {
-		panic(err)
+		logger.Error(err)
+		// panic(err)
 	}
 
 	// run

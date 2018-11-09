@@ -78,6 +78,7 @@ func main() {
 			Sys: &syscall.SysProcAttr{
 				Pdeathsig: syscall.SIGTERM,
 				Cloneflags: syscall.CLONE_NEWPID |
+					// syscall.CLONE_NEWUSER |
 					syscall.CLONE_NEWNS |
 					syscall.CLONE_NEWUTS |
 					syscall.CLONE_NEWIPC |
@@ -94,11 +95,14 @@ func main() {
 		defer builder.ReleaseNetwork()
 	}
 
+	UidMap(process.Pid, 0, os.Getuid(), 1)
+	GidMap(process.Pid, 0, os.Getgid(), 1)
+
+	defer ReleaseBaseFiles(&conf)
+
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, uint32(process.Pid))
 	f0.Write(buf)
-
-	defer ReleaseBaseFiles(&conf)
 
 	if _, err = process.Wait(); err != nil {
 		panic(err)

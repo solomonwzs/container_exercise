@@ -22,7 +22,7 @@ var mountList = []mountArgs{
 	mountArgs{"proc", "/proc", "proc", 0, ""},
 	mountArgs{"sysfs", "/sys", "sysfs", 0, ""},
 	mountArgs{"none", "/tmp", "tmpfs", 0, ""},
-	mountArgs{"udev", "/dev", "devtmpfs", 0, ""},
+	// mountArgs{"udev", "/dev", "devtmpfs", 0, ""},
 	mountArgs{"devpts", "/dev/pts", "devpts", 0, ""},
 	mountArgs{"shm", "/dev/shm", "tmpfs", 0, ""},
 	mountArgs{"tmpfs", "/run", "tmpfs", 0, ""},
@@ -31,6 +31,10 @@ var mountList = []mountArgs{
 var copyFiles = [][2]string{
 	[2]string{"/etc/resolv.conf", "/etc/resolv.conf"},
 	[2]string{"/etc/hosts", "/etc/hosts"},
+}
+
+func RootPaht(conf *Configuration) string {
+	return filepath.Join(conf.BaseSys.Workspace, conf.Name, "meger")
 }
 
 func CopyFile(src, dst string) (err error) {
@@ -112,7 +116,7 @@ func UmountCustomFiles(path string, customMountList []CMount) error {
 
 func BuildBaseFiles(conf *Configuration) (err error) {
 	lowerPath := filepath.Join(conf.BaseSys.Dir, conf.BaseSys.System)
-	mergePath := filepath.Join(conf.BaseSys.Workspace, conf.Name, "meger")
+	mergePath := RootPaht(conf)
 	upperPath := filepath.Join(conf.BaseSys.Workspace, conf.Name, "upper")
 	workPath := filepath.Join(conf.BaseSys.Workspace, conf.Name, "work")
 
@@ -147,7 +151,6 @@ func BuildBaseFiles(conf *Configuration) (err error) {
 	if err0 := syscall.Chdir(mergePath); err0 != nil {
 		logger.Error(err0)
 	}
-
 	if err0 := syscall.Chroot("./"); err0 != nil {
 		logger.Error(err0)
 	}
@@ -156,7 +159,7 @@ func BuildBaseFiles(conf *Configuration) (err error) {
 }
 
 func ReleaseBaseFiles(conf *Configuration) {
-	mergePath := filepath.Join(conf.BaseSys.Workspace, conf.Name, "meger")
+	mergePath := RootPaht(conf)
 
 	UmountCustomFiles(mergePath, conf.Mount)
 
