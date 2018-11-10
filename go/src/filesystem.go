@@ -141,7 +141,7 @@ func BuildBaseFiles(conf *Configuration) (err error) {
 
 	for _, fs := range copyFiles {
 		dest := filepath.Join(mergePath, fs[1])
-		if err0 := CopyFile(fs[0], dest); err != nil {
+		if err0 := CopyFile(fs[0], dest); err0 != nil {
 			logger.Error(err0)
 		}
 	}
