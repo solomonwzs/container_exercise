@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"syscall"
 
@@ -45,6 +46,18 @@ func (s *ContainerServer) Serv() {
 }
 
 func containerRun() {
+	ch := make(chan os.Signal)
+	signal.Notify(ch, os.Interrupt, os.Kill, syscall.SIGINT,
+		syscall.SIGTERM, syscall.SIGCHLD)
+	go func() {
+		for {
+			select {
+			case sig := <-ch:
+				logger.Debug(sig)
+			}
+		}
+	}()
+
 	filename := os.Args[1]
 	fd, _ := strconv.Atoi(os.Args[2])
 	var conf Configuration
@@ -60,6 +73,7 @@ func containerRun() {
 	buf := make([]byte, 4)
 	mgrs.Read(buf)
 	pid := int(binary.BigEndian.Uint32(buf))
+	logger.Debug(pid)
 
 	// set network
 	networkBuilders := ParserNetworkBuilders(pid, conf)

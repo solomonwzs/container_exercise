@@ -1,5 +1,10 @@
 package main
 
+/*
+#define _GNU_SOURCE
+#include <sched.h>
+*/
+import "C"
 import (
 	"encoding/binary"
 	"flag"
@@ -79,6 +84,7 @@ func main() {
 				Pdeathsig: syscall.SIGTERM,
 				Cloneflags: syscall.CLONE_NEWPID |
 					// syscall.CLONE_NEWUSER |
+					// C.CLONE_NEWCGROUP |
 					syscall.CLONE_NEWNS |
 					syscall.CLONE_NEWUTS |
 					syscall.CLONE_NEWIPC |
