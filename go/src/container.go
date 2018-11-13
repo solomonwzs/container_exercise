@@ -53,7 +53,9 @@ func containerRun() {
 		for {
 			select {
 			case sig := <-ch:
-				logger.Debug(sig)
+				if sig == syscall.SIGCHLD {
+					syscall.Wait4(-1, nil, 0, nil)
+				}
 			}
 		}
 	}()
