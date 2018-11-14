@@ -3,6 +3,7 @@ package main
 /*
 #define _GNU_SOURCE
 #include <sched.h>
+#include "network.h"
 */
 import "C"
 import (
@@ -59,6 +60,8 @@ func GidMap(pid, idInsideNs, idOutsideNs, mapRange int) (err error) {
 }
 
 func main() {
+	C.foo()
+
 	var conf Configuration
 	var filename string
 	flag.StringVar(&filename, "f", "", "config filename")
@@ -77,7 +80,11 @@ func main() {
 
 	process, err := os.StartProcess(
 		_PATH_PROC_BINARY,
-		[]string{_BRANCH_CONTAINER, filename, strconv.Itoa(int(f1.Fd()))},
+		[]string{_BRANCH_CONTAINER,
+			filename,
+			strconv.Itoa(int(f0.Fd())),
+			strconv.Itoa(int(f1.Fd())),
+		},
 		&os.ProcAttr{
 			Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
 			Sys: &syscall.SysProcAttr{
@@ -105,6 +112,9 @@ func main() {
 	GidMap(process.Pid, 0, os.Getgid(), 1)
 
 	defer ReleaseBaseFiles(&conf)
+
+	C.net_create_veth(C.CString("xx0"), C.CString("xx1"),
+		C.unsigned(process.Pid))
 
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, uint32(process.Pid))

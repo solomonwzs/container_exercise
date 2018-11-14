@@ -61,13 +61,18 @@ func containerRun() {
 	}()
 
 	filename := os.Args[1]
-	fd, _ := strconv.Atoi(os.Args[2])
+	f0, _ := strconv.Atoi(os.Args[2])
+	f1, _ := strconv.Atoi(os.Args[3])
 	var conf Configuration
 	if _, err := toml.DecodeFile(filename, &conf); err != nil {
 		panic(err)
 	}
 
-	mgrs := os.NewFile(uintptr(fd), "mgrs")
+	fm := os.NewFile(uintptr(f0), "sock-main")
+	fm.Close()
+
+	syscall.CloseOnExec(f1)
+	mgrs := os.NewFile(uintptr(f1), "mgrs")
 	defer mgrs.Close()
 
 	SystemCmd("id")
