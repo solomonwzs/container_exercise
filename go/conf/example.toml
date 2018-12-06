@@ -25,15 +25,12 @@ ip = "172.20.1.11"
 [[network.interface]]
 name = "eno1"
 type = "macvlan"
-# host_interface = "enp2s0"
 host_interface = "eno1"
 mode = "bridge"
 mask = "255.255.255.0"
 ip = "192.168.197.131"
-# ip = "10.0.0.129"
 
 [[network.route]]
 dest = "0.0.0.0"
 mask = "0.0.0.0"
 gateway = "192.168.197.252"
-# gateway = "10.0.0.1"

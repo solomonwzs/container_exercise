@@ -60,8 +60,6 @@ func GidMap(pid, idInsideNs, idOutsideNs, mapRange int) (err error) {
 }
 
 func main() {
-	C.foo()
-
 	var conf Configuration
 	var filename string
 	flag.StringVar(&filename, "f", "", "config filename")
@@ -113,8 +111,8 @@ func main() {
 
 	defer ReleaseBaseFiles(&conf)
 
-	C.net_create_veth(C.CString("xx0"), C.CString("xx1"),
-		C.unsigned(process.Pid))
+	// C.net_create_veth(C.CString("xx0"), C.CString("xx1"),
+	// 	C.unsigned(process.Pid))
 
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, uint32(process.Pid))

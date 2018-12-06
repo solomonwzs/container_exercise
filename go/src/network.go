@@ -7,6 +7,8 @@ import (
 	"net"
 	"strconv"
 	"sync/atomic"
+
+	"github.com/solomonwzs/goxutil/logger"
 )
 
 var devUniqID uint32 = 0
@@ -24,7 +26,12 @@ func ParserNetworkBuilders(cPid int, conf Configuration) []NetworkBuilder {
 		case "bridge":
 			nb = append(nb, NewCNIBridge(cPid, netConf))
 		case "macvlan":
-			nb = append(nb, NewCNIMacvlan(cPid, netConf))
+			builder, err := NewCNIMacvlan(cPid, netConf)
+			if err != nil {
+				logger.Error(err)
+			} else {
+				nb = append(nb, builder)
+			}
 		default:
 		}
 	}
@@ -78,7 +85,7 @@ type CNIBridge struct {
 	VethB      string
 }
 
-func NewCNIBridge(cPid int, conf CNetworkInterface) CNIBridge {
+func NewCNIBridge(cPid int, conf CNetworkInterface) *CNIBridge {
 	devid := atomic.AddUint32(&devUniqID, 1)
 	pid := strconv.Itoa(cPid)
 
@@ -98,7 +105,7 @@ func NewCNIBridge(cPid int, conf CNetworkInterface) CNIBridge {
 
 	ruleSrc := fmt.Sprintf("%s/%d", Dec2Ipv4(ipDec&maskDec), maskValidBits)
 
-	return CNIBridge{
+	return &CNIBridge{
 		BridgeAddr: bridgeAddr,
 		BridgeName: bridgeName,
 		Name:       conf.Name,
@@ -110,7 +117,7 @@ func NewCNIBridge(cPid int, conf CNetworkInterface) CNIBridge {
 	}
 }
 
-func (conf CNIBridge) BuildNetwork() (err error) {
+func (conf *CNIBridge) BuildNetwork() (err error) {
 	// create bridge
 	SystemCmd("ip", "link",
 		"add", conf.BridgeName, "type", "bridge")
@@ -142,7 +149,7 @@ func (conf CNIBridge) BuildNetwork() (err error) {
 	return
 }
 
-func (conf CNIBridge) ReleaseNetwork() (err error) {
+func (conf *CNIBridge) ReleaseNetwork() (err error) {
 	SystemCmd("iptables",
 		"-t", "nat",
 		"-D", "POSTROUTING",
@@ -154,7 +161,7 @@ func (conf CNIBridge) ReleaseNetwork() (err error) {
 	return
 }
 
-func (conf CNIBridge) SetupNetwork() (err error) {
+func (conf *CNIBridge) SetupNetwork() (err error) {
 	SystemCmd("ip", "link", "set", "lo", "up")
 	SystemCmd("ip", "link", "set", conf.VethB, "name", conf.Name)
 	SystemCmd("ip", "link", "set", conf.Name, "up")
@@ -168,32 +175,51 @@ type CNIMacvlan struct {
 	VName         string
 	Pid           string
 	Mode          string
-	Addr          string
+	IP            net.IP
+	Mask          net.IP
 }
 
-func NewCNIMacvlan(cPid int, conf CNetworkInterface) CNIMacvlan {
+func NewCNIMacvlan(cPid int, conf CNetworkInterface) (*CNIMacvlan, error) {
 	devid := atomic.AddUint32(&devUniqID, 1)
 	pid := strconv.Itoa(cPid)
 
 	vname := fmt.Sprintf("macv%s-%d", pid, devid)
 
-	mask := net.ParseIP(conf.Mask)
-	maskValidBits := MaskValidBits(mask)
-	ip := net.ParseIP(conf.IP)
+	var (
+		ip   net.IP
+		mask net.IP
+	)
 
-	addr := fmt.Sprintf("%s/%d", ip, maskValidBits)
+	if conf.IP != "" {
+		mask = net.ParseIP(conf.Mask)
+		ip = net.ParseIP(conf.IP)
 
-	return CNIMacvlan{
+		if ip == nil || mask == nil {
+			return nil, fmt.Errorf("invalid ip (%s) or mask (%s)",
+				conf.IP, conf.Mask)
+		}
+	}
+
+	return &CNIMacvlan{
 		HostInterface: conf.HostInterface,
 		Mode:          conf.Mode,
 		Pid:           pid,
 		Name:          conf.Name,
 		VName:         vname,
-		Addr:          addr,
-	}
+		IP:            ip,
+		Mask:          mask,
+	}, nil
 }
 
-func (conf CNIMacvlan) BuildNetwork() (err error) {
+func (conf *CNIMacvlan) getAddr() (addr string, err error) {
+	if conf.IP != nil {
+		maskValidBits := MaskValidBits(conf.Mask)
+		addr = fmt.Sprintf("%s/%d", conf.IP, maskValidBits)
+	}
+	return
+}
+
+func (conf *CNIMacvlan) BuildNetwork() (err error) {
 	SystemCmd("ip", "link",
 		"add", "link", conf.HostInterface, "name", conf.VName,
 		"type", "macvlan", "mode", conf.Mode)
@@ -202,13 +228,18 @@ func (conf CNIMacvlan) BuildNetwork() (err error) {
 	return
 }
 
-func (conf CNIMacvlan) ReleaseNetwork() (err error) { return }
+func (conf *CNIMacvlan) ReleaseNetwork() (err error) { return }
 
-func (conf CNIMacvlan) SetupNetwork() (err error) {
+func (conf *CNIMacvlan) SetupNetwork() (err error) {
+	addr, err := conf.getAddr()
+	if err != nil {
+		return
+	}
+
 	SystemCmd("ip", "link", "set", "lo", "up")
 	SystemCmd("ip", "link", "set", conf.VName, "name", conf.Name)
 	SystemCmd("ip", "link", "set", conf.Name, "up")
-	SystemCmd("ip", "addr", "add", conf.Addr, "dev", conf.Name)
+	SystemCmd("ip", "addr", "add", addr, "dev", conf.Name)
 
 	return
 }
