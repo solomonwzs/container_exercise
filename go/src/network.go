@@ -117,7 +117,7 @@ func NewCNIBridge(cPid int, conf CNetworkInterface) *CNIBridge {
 	}
 }
 
-func (conf *CNIBridge) BuildNetwork() (err error) {
+func (conf CNIBridge) BuildNetwork() (err error) {
 	// create bridge
 	SystemCmd("ip", "link",
 		"add", conf.BridgeName, "type", "bridge")
@@ -149,7 +149,7 @@ func (conf *CNIBridge) BuildNetwork() (err error) {
 	return
 }
 
-func (conf *CNIBridge) ReleaseNetwork() (err error) {
+func (conf CNIBridge) ReleaseNetwork() (err error) {
 	SystemCmd("iptables",
 		"-t", "nat",
 		"-D", "POSTROUTING",
@@ -161,7 +161,7 @@ func (conf *CNIBridge) ReleaseNetwork() (err error) {
 	return
 }
 
-func (conf *CNIBridge) SetupNetwork() (err error) {
+func (conf CNIBridge) SetupNetwork() (err error) {
 	SystemCmd("ip", "link", "set", "lo", "up")
 	SystemCmd("ip", "link", "set", conf.VethB, "name", conf.Name)
 	SystemCmd("ip", "link", "set", conf.Name, "up")
@@ -179,7 +179,7 @@ type CNIMacvlan struct {
 	Mask          net.IP
 }
 
-func NewCNIMacvlan(cPid int, conf CNetworkInterface) (*CNIMacvlan, error) {
+func NewCNIMacvlan(cPid int, conf CNetworkInterface) (CNIMacvlan, error) {
 	devid := atomic.AddUint32(&devUniqID, 1)
 	pid := strconv.Itoa(cPid)
 
@@ -195,12 +195,12 @@ func NewCNIMacvlan(cPid int, conf CNetworkInterface) (*CNIMacvlan, error) {
 		ip = net.ParseIP(conf.IP)
 
 		if ip == nil || mask == nil {
-			return nil, fmt.Errorf("invalid ip (%s) or mask (%s)",
+			return CNIMacvlan{}, fmt.Errorf("invalid ip (%s) or mask (%s)",
 				conf.IP, conf.Mask)
 		}
 	}
 
-	return &CNIMacvlan{
+	return CNIMacvlan{
 		HostInterface: conf.HostInterface,
 		Mode:          conf.Mode,
 		Pid:           pid,
@@ -211,15 +211,29 @@ func NewCNIMacvlan(cPid int, conf CNetworkInterface) (*CNIMacvlan, error) {
 	}, nil
 }
 
-func (conf *CNIMacvlan) getAddr() (addr string, err error) {
+func (conf CNIMacvlan) getAddr() (addr string, err error) {
 	if conf.IP != nil {
 		maskValidBits := MaskValidBits(conf.Mask)
 		addr = fmt.Sprintf("%s/%d", conf.IP, maskValidBits)
+	} else {
+		var (
+			interf *net.Interface
+			reply  DHCPReply
+		)
+		if interf, err = net.InterfaceByName(conf.Name); err != nil {
+			return
+		}
+		if reply, err = DHCPApply(interf); err != nil {
+			return
+		}
+
+		maskValidBits := MaskValidBits(reply.SubnetMask)
+		addr = fmt.Sprintf("%s/%d", reply.ClientIP, maskValidBits)
 	}
 	return
 }
 
-func (conf *CNIMacvlan) BuildNetwork() (err error) {
+func (conf CNIMacvlan) BuildNetwork() (err error) {
 	SystemCmd("ip", "link",
 		"add", "link", conf.HostInterface, "name", conf.VName,
 		"type", "macvlan", "mode", conf.Mode)
@@ -228,18 +242,18 @@ func (conf *CNIMacvlan) BuildNetwork() (err error) {
 	return
 }
 
-func (conf *CNIMacvlan) ReleaseNetwork() (err error) { return }
+func (conf CNIMacvlan) ReleaseNetwork() (err error) { return }
 
-func (conf *CNIMacvlan) SetupNetwork() (err error) {
-	addr, err := conf.getAddr()
-	if err != nil {
-		return
-	}
-
+func (conf CNIMacvlan) SetupNetwork() (err error) {
 	SystemCmd("ip", "link", "set", "lo", "up")
 	SystemCmd("ip", "link", "set", conf.VName, "name", conf.Name)
 	SystemCmd("ip", "link", "set", conf.Name, "up")
-	SystemCmd("ip", "addr", "add", addr, "dev", conf.Name)
+	addr, err := conf.getAddr()
+	if err != nil {
+		logger.Error(err)
+		return
+	}
 
+	SystemCmd("ip", "addr", "add", addr, "dev", conf.Name)
 	return
 }

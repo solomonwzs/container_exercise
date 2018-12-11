@@ -9,6 +9,8 @@ import (
 	"github.com/solomonwzs/goxutil/net/transport"
 )
 
+var ERR_NOT_EXPECTED_REPLY = errors.New("not expected reply")
+
 type DHCPReply struct {
 	ClientIP   net.IP
 	DHPServer  net.IP
@@ -17,7 +19,7 @@ type DHCPReply struct {
 	LeaseTime  time.Duration
 }
 
-func DHCPApply(interf *net.Interface) (reply *DHCPReply, err error) {
+func DHCPApply(interf *net.Interface) (reply DHCPReply, err error) {
 	conn, err := transport.NewUDPBroadcastConn(
 		dhcp.CLIENT_PORT, dhcp.SERVER_PORT)
 	if err != nil {
@@ -44,12 +46,12 @@ func DHCPApply(interf *net.Interface) (reply *DHCPReply, err error) {
 		return
 	} else if t, err := rMsg.MessageType(); err != nil ||
 		t != dhcp.DHCPOFFER {
-		return nil, errors.New("not expected reply")
+		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
 	}
 	clientIP := rMsg.ClientIP()
 	dhcpServerIP, err := rMsg.DHCPServerID()
 	if err != nil {
-		return nil, errors.New("not expected reply")
+		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
 	}
 
 	// request
@@ -72,8 +74,31 @@ func DHCPApply(interf *net.Interface) (reply *DHCPReply, err error) {
 		return
 	} else if t, err := rMsg.MessageType(); err != nil ||
 		t != dhcp.DHCPACK {
-		return nil, errors.New("not expected reply")
+		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
+	}
+	clientIP = rMsg.ClientIP()
+	dhcpServer, err := rMsg.DHCPServerID()
+	if err != nil {
+		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
+	}
+	subnetMask, err := rMsg.SubnetMask()
+	if err != nil {
+		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
+	}
+	router, err := rMsg.Router()
+	if err != nil {
+		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
+	}
+	leaseTime, err := rMsg.AddressLeaseTime()
+	if err != nil {
+		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
 	}
 
-	return
+	return DHCPReply{
+		ClientIP:   clientIP,
+		DHPServer:  dhcpServer,
+		SubnetMask: subnetMask,
+		Router:     router,
+		LeaseTime:  time.Duration(leaseTime),
+	}, nil
 }

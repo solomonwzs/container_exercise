@@ -27,8 +27,8 @@ name = "eno1"
 type = "macvlan"
 host_interface = "eno1"
 mode = "bridge"
-mask = "255.255.255.0"
-ip = "192.168.197.131"
+# mask = "255.255.255.0"
+# ip = "192.168.197.131"
 
 [[network.route]]
 dest = "0.0.0.0"
