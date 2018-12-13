@@ -22,13 +22,21 @@ type = "bridge"
 mask = "255.255.255.0"
 ip = "172.20.1.11"
 
-[[network.interface]]
-name = "eno1"
-type = "macvlan"
-host_interface = "eno1"
-mode = "bridge"
+# [[network.interface]]
+# name = "eno1"
+# type = "macvlan"
+# host_interface = "eno1"
+# mode = "bridge"
 # mask = "255.255.255.0"
-# ip = "192.168.197.131"
+# ip = "192.168.197.132"
+
+[[network.interface]]
+name = "eno2"
+type = "vlan"
+id = "105"
+host_interface = "eno1"
+mask = "255.255.255.0"
+ip = "192.168.197.133"
 
 [[network.route]]
 dest = "0.0.0.0"

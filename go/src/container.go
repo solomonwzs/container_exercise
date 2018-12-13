@@ -1,6 +1,8 @@
 package main
 
 import (
+	"cnet"
+	"csys"
 	"encoding/binary"
 	"io"
 	"os"
@@ -75,7 +77,7 @@ func containerRun() {
 	mgrs := os.NewFile(uintptr(f1), "mgrs")
 	defer mgrs.Close()
 
-	SystemCmd("id")
+	csys.SystemCmd("id")
 
 	buf := make([]byte, 4)
 	mgrs.Read(buf)
@@ -83,11 +85,11 @@ func containerRun() {
 	logger.Debug(pid)
 
 	// set network
-	networkBuilders := ParserNetworkBuilders(pid, conf)
+	networkBuilders := cnet.ParserNetworkBuilders(pid, conf.Network)
 	for _, builder := range networkBuilders {
 		builder.SetupNetwork()
 	}
-	AddNetworkRoutes(conf.Network.Routes)
+	cnet.AddNetworkRoutes(conf.Network.Routes)
 
 	// mount
 	if err := BuildBaseFiles(&conf); err != nil {

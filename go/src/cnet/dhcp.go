@@ -1,4 +1,4 @@
-package main
+package cnet
 
 import (
 	"errors"
@@ -20,7 +20,7 @@ type DHCPReply struct {
 }
 
 func DHCPApply(interf *net.Interface) (reply DHCPReply, err error) {
-	conn, err := transport.NewUDPBroadcastConn(
+	conn, err := transport.NewUDPBroadcastRawConn(interf,
 		dhcp.CLIENT_PORT, dhcp.SERVER_PORT)
 	if err != nil {
 		return
@@ -29,7 +29,7 @@ func DHCPApply(interf *net.Interface) (reply DHCPReply, err error) {
 	buf := make([]byte, 1024)
 
 	// discover
-	msg := dhcp.NewMessaageForInterface(interf)
+	msg := dhcp.NewMessageForInterface(interf)
 	msg.SetMessageType(dhcp.DHCPDISCOVER)
 	msg.SetBroadcast()
 	if _, err = conn.Write(msg.Marshal()); err != nil {
@@ -49,34 +49,45 @@ func DHCPApply(interf *net.Interface) (reply DHCPReply, err error) {
 		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
 	}
 	clientIP := rMsg.ClientIP()
-	dhcpServerIP, err := rMsg.DHCPServerID()
+	// dhcpServerIP, err := rMsg.DHCPServerID()
+	// if err != nil {
+	// 	return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
+	// }
+
+	return DHCPRequest(interf, clientIP)
+}
+
+func DHCPRequest(interf *net.Interface, ip net.IP) (
+	reply DHCPReply, err error) {
+	conn, err := transport.NewUDPBroadcastRawConn(interf,
+		dhcp.CLIENT_PORT, dhcp.SERVER_PORT)
 	if err != nil {
-		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
+		return
 	}
+	defer conn.Close()
 
 	// request
-	msg = dhcp.NewMessaageForInterface(interf)
+	msg := dhcp.NewMessageForInterface(interf)
 	msg.SetBroadcast()
 	msg.SetMessageType(dhcp.DHCPREQUEST)
-	msg.SetOptions(dhcp.OPT_ADDR_REQUEST, []byte(clientIP))
-	msg.SetOptions(dhcp.OPT_DHCP_SERVER_ID, []byte(dhcpServerIP))
+	msg.SetOptions(dhcp.OPT_ADDR_REQUEST, []byte(ip.To4()))
 	if _, err = conn.Write(msg.Marshal()); err != nil {
 		return
 	}
 
 	// ack
-	n, err = conn.Read(buf)
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
 	if err != nil {
 		return
 	}
-	rMsg, err = dhcp.Unmarshal(buf[:n])
+	rMsg, err := dhcp.Unmarshal(buf[:n])
 	if err != nil {
 		return
 	} else if t, err := rMsg.MessageType(); err != nil ||
 		t != dhcp.DHCPACK {
 		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
 	}
-	clientIP = rMsg.ClientIP()
 	dhcpServer, err := rMsg.DHCPServerID()
 	if err != nil {
 		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
@@ -95,7 +106,7 @@ func DHCPApply(interf *net.Interface) (reply DHCPReply, err error) {
 	}
 
 	return DHCPReply{
-		ClientIP:   clientIP,
+		ClientIP:   ip,
 		DHPServer:  dhcpServer,
 		SubnetMask: subnetMask,
 		Router:     router,

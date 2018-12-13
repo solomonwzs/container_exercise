@@ -7,6 +7,7 @@ package main
 */
 import "C"
 import (
+	"cnet"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -69,7 +70,7 @@ func main() {
 	}
 	logger.Debugf("%+v\n", conf)
 
-	f0, f1, err := NewSocketpair()
+	f0, f1, err := cnet.NewSocketpair()
 	if err != nil {
 		panic(err)
 	}
@@ -100,7 +101,8 @@ func main() {
 		panic(err)
 	}
 
-	networkBuilders := ParserNetworkBuilders(process.Pid, conf)
+	networkBuilders := cnet.ParserNetworkBuilders(
+		process.Pid, conf.Network)
 	for _, builder := range networkBuilders {
 		builder.BuildNetwork()
 		defer builder.ReleaseNetwork()
