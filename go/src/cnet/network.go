@@ -47,15 +47,22 @@ func ParserNetworkBuilders(cPid int, conf CNetwork) []NetworkBuilder {
 		switch netConf.Type {
 		case "bridge":
 			nb = append(nb, NewCNIBridge(cPid, netConf))
-		case "macvlan":
-			builder, err := NewCNIMacvlan(cPid, netConf)
+		case "vlan":
+			builder, err := NewCNIVlan(cPid, netConf)
 			if err != nil {
 				logger.Error(err)
 			} else {
 				nb = append(nb, builder)
 			}
-		case "vlan":
-			builder, err := NewCNIVlan(cPid, netConf)
+		case "ipvlan":
+			builder, err := NewCNIIPvlan(cPid, netConf)
+			if err != nil {
+				logger.Error(err)
+			} else {
+				nb = append(nb, builder)
+			}
+		case "macvlan":
+			builder, err := NewCNIMacvlan(cPid, netConf)
 			if err != nil {
 				logger.Error(err)
 			} else {
@@ -217,8 +224,6 @@ func (conf _CNIVlan) getAddr() (addr string, err error) {
 	}
 
 	if conf.IP != nil {
-		go DHCPRequest(interf, conf.IP)
-
 		maskValidBits := MaskValidBits(conf.Mask)
 		addr = fmt.Sprintf("%s/%d", conf.IP, maskValidBits)
 	} else {
@@ -254,21 +259,14 @@ type CNIVlan struct {
 }
 
 func NewCNIVlan(cPid int, conf CNetworkInterface) (CNIVlan, error) {
-	var (
-		pid   string = strconv.Itoa(cPid)
-		vname string = fmt.Sprintf("vlan-%s", conf.ID)
-		ip    net.IP
-		mask  net.IP
-	)
+	pid := strconv.Itoa(cPid)
+	vname := fmt.Sprintf("vlan-%s", conf.ID)
+	mask := net.ParseIP(conf.Mask)
+	ip := net.ParseIP(conf.IP)
 
-	if conf.IP != "" {
-		mask = net.ParseIP(conf.Mask)
-		ip = net.ParseIP(conf.IP)
-
-		if ip == nil || mask == nil {
-			return CNIVlan{}, fmt.Errorf("invalid ip (%s) or mask (%s)",
-				conf.IP, conf.Mask)
-		}
+	if ip == nil || mask == nil {
+		return CNIVlan{}, fmt.Errorf("invalid ip (%s) or mask (%s)",
+			conf.IP, conf.Mask)
 	}
 
 	return CNIVlan{
@@ -288,6 +286,56 @@ func (conf CNIVlan) BuildNetwork() (err error) {
 	csys.SystemCmd("ip", "link",
 		"add", "link", conf.HostInterface, "name", conf.VName,
 		"type", "vlan", "id", conf.ID)
+	csys.SystemCmd("ip", "link",
+		"set", conf.VName, "netns", conf.Pid)
+	return
+}
+
+type CNIIPvlan struct {
+	_CNIVlan
+	Mode string
+}
+
+func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
+	var (
+		devid uint32 = atomic.AddUint32(&devUniqID, 1)
+		pid   string = strconv.Itoa(cPid)
+		vname string = fmt.Sprintf("ipv%s-%d", pid, devid)
+		ip    net.IP
+		mask  net.IP
+	)
+
+	if conf.IP != "" {
+		mask = net.ParseIP(conf.Mask)
+		ip = net.ParseIP(conf.IP)
+
+		if ip == nil || mask == nil {
+			return CNIIPvlan{}, fmt.Errorf("invalid ip (%s) or mask (%s)",
+				conf.IP, conf.Mask)
+		}
+	}
+
+	if conf.Mode != "l2" && conf.Mode != "l3" {
+		return CNIIPvlan{}, nil
+	}
+
+	return CNIIPvlan{
+		_CNIVlan: _CNIVlan{
+			HostInterface: conf.HostInterface,
+			Pid:           pid,
+			VName:         vname,
+			Name:          conf.Name,
+			IP:            ip,
+			Mask:          mask,
+		},
+		Mode: conf.Mode,
+	}, nil
+}
+
+func (conf CNIIPvlan) BuildNetwork() (err error) {
+	csys.SystemCmd("ip", "link",
+		"add", "link", conf.HostInterface, "name", conf.VName,
+		"type", "ipvlan", "mode", conf.Mode)
 	csys.SystemCmd("ip", "link",
 		"set", conf.VName, "netns", conf.Pid)
 	return
@@ -315,6 +363,11 @@ func NewCNIMacvlan(cPid int, conf CNetworkInterface) (CNIMacvlan, error) {
 			return CNIMacvlan{}, fmt.Errorf("invalid ip (%s) or mask (%s)",
 				conf.IP, conf.Mask)
 		}
+	}
+
+	if conf.Mode != "bridge" && conf.Mode != "vepa" &&
+		conf.Mode != "private" {
+		return CNIMacvlan{}, nil
 	}
 
 	return CNIMacvlan{

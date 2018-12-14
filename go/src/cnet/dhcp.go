@@ -49,39 +49,27 @@ func DHCPApply(interf *net.Interface) (reply DHCPReply, err error) {
 		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
 	}
 	clientIP := rMsg.ClientIP()
-	// dhcpServerIP, err := rMsg.DHCPServerID()
-	// if err != nil {
-	// 	return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
-	// }
-
-	return DHCPRequest(interf, clientIP)
-}
-
-func DHCPRequest(interf *net.Interface, ip net.IP) (
-	reply DHCPReply, err error) {
-	conn, err := transport.NewUDPBroadcastRawConn(interf,
-		dhcp.CLIENT_PORT, dhcp.SERVER_PORT)
+	dhcpServerIP, err := rMsg.DHCPServerID()
 	if err != nil {
-		return
+		return DHCPReply{}, ERR_NOT_EXPECTED_REPLY
 	}
-	defer conn.Close()
 
 	// request
-	msg := dhcp.NewMessageForInterface(interf)
+	msg = dhcp.NewMessageForInterface(interf)
 	msg.SetBroadcast()
 	msg.SetMessageType(dhcp.DHCPREQUEST)
-	msg.SetOptions(dhcp.OPT_ADDR_REQUEST, []byte(ip.To4()))
+	msg.SetOptions(dhcp.OPT_ADDR_REQUEST, []byte(clientIP.To4()))
+	msg.SetOptions(dhcp.OPT_DHCP_SERVER_ID, []byte(dhcpServerIP.To4()))
 	if _, err = conn.Write(msg.Marshal()); err != nil {
 		return
 	}
 
 	// ack
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
+	n, err = conn.Read(buf)
 	if err != nil {
 		return
 	}
-	rMsg, err := dhcp.Unmarshal(buf[:n])
+	rMsg, err = dhcp.Unmarshal(buf[:n])
 	if err != nil {
 		return
 	} else if t, err := rMsg.MessageType(); err != nil ||
@@ -106,7 +94,7 @@ func DHCPRequest(interf *net.Interface, ip net.IP) (
 	}
 
 	return DHCPReply{
-		ClientIP:   ip,
+		ClientIP:   clientIP,
 		DHPServer:  dhcpServer,
 		SubnetMask: subnetMask,
 		Router:     router,
