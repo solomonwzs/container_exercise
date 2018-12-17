@@ -1,5 +1,9 @@
 package cnet
 
+/*
+#include "network.h"
+*/
+import "C"
 import (
 	"csys"
 	"encoding/binary"
@@ -8,6 +12,7 @@ import (
 	"net"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"github.com/solomonwzs/goxutil/logger"
 )
@@ -227,7 +232,7 @@ func (conf _CNIVlan) getAddr() (addr string, err error) {
 		maskValidBits := MaskValidBits(conf.Mask)
 		addr = fmt.Sprintf("%s/%d", conf.IP, maskValidBits)
 	} else {
-		if reply, err = DHCPApply(interf); err != nil {
+		if reply, err = DHCPApply(interf, 5*time.Second); err != nil {
 			return
 		}
 
@@ -293,7 +298,9 @@ func (conf CNIVlan) BuildNetwork() (err error) {
 
 type CNIIPvlan struct {
 	_CNIVlan
-	Mode string
+	Mode  string
+	_Pid  C.unsigned
+	_Mode C.uint16_t
 }
 
 func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
@@ -303,6 +310,7 @@ func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
 		vname string = fmt.Sprintf("ipv%s-%d", pid, devid)
 		ip    net.IP
 		mask  net.IP
+		mode  C.uint16_t
 	)
 
 	if conf.IP != "" {
@@ -315,7 +323,12 @@ func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
 		}
 	}
 
-	if conf.Mode != "l2" && conf.Mode != "l3" {
+	switch conf.Mode {
+	case "l2":
+		mode = C.IPVLAN_MODE_L2
+	case "l3":
+		mode = C.IPVLAN_MODE_L3
+	default:
 		return CNIIPvlan{}, nil
 	}
 
@@ -328,16 +341,23 @@ func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
 			IP:            ip,
 			Mask:          mask,
 		},
-		Mode: conf.Mode,
+		_Pid:  C.unsigned(cPid),
+		_Mode: mode,
+		Mode:  conf.Mode,
 	}, nil
 }
 
 func (conf CNIIPvlan) BuildNetwork() (err error) {
-	csys.SystemCmd("ip", "link",
-		"add", "link", conf.HostInterface, "name", conf.VName,
-		"type", "ipvlan", "mode", conf.Mode)
-	csys.SystemCmd("ip", "link",
-		"set", conf.VName, "netns", conf.Pid)
+	// csys.SystemCmd("ip", "link",
+	// 	"add", "link", conf.HostInterface, "name", conf.VName,
+	// 	"type", "ipvlan", "mode", conf.Mode)
+	// csys.SystemCmd("ip", "link",
+	// 	"set", conf.VName, "netns", conf.Pid)
+	C.net_create_ipvlan(
+		C.CString(conf.HostInterface),
+		C.CString(conf.VName),
+		conf._Mode,
+		conf._Pid)
 	return
 }
 

@@ -1,5 +1,4 @@
 #include "network.h"
-#include <libnetlink.h>
 #include <linux/veth.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,26 +21,23 @@ foo() {
 
 int
 net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
-  int len;
-  struct iplink_req req;
-
   if (rtnl_open(&rth, 0) < 0) {
     fprintf(stderr, "cannot open netlink\n");
     return 1;
   }
 
+  struct iplink_req req;
   memset(&req, 0, sizeof(req));
-
   req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
   req.n.nlmsg_flags = NLM_F_REQUEST|NLM_F_CREATE|NLM_F_EXCL;
   req.n.nlmsg_type = RTM_NEWLINK;
   req.i.ifi_family = 0;
 
   if (dev) {
-    len = strlen(dev) + 1;
-    addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, len);
+    addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, strlen(dev) + 1);
   }
 
+  // add link info for the new interface
   struct rtattr *linkinfo = NLMSG_TAIL(&req.n);
   addattr_l(&req.n, sizeof(req), IFLA_LINKINFO, NULL, 0);
   addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, "veth", strlen("veth"));
@@ -57,11 +53,10 @@ net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
   addattr_l(&req.n, sizeof(req), IFLA_NET_NS_PID, &pid, sizeof(pid));
 
   if (nsdev) {
-    int len = strlen(nsdev) + 1;
-    addattr_l(&req.n, sizeof(req), IFLA_IFNAME, nsdev, len);
+    addattr_l(&req.n, sizeof(req), IFLA_IFNAME, nsdev, strlen(nsdev));
   }
-  peerdata->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)peerdata;
 
+  peerdata->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)peerdata;
   data->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)data;
   linkinfo->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)linkinfo;
 
@@ -69,7 +64,6 @@ net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
   if (rtnl_talk(&rth, &req.n, NULL) < 0) {
     return 1;
   }
-
   rtnl_close(&rth);
 
   return 0;
@@ -77,18 +71,15 @@ net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
 
 
 int
-net_create_ipvlan(const char *host_dev, const char *dev, int type,
+net_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
                   unsigned pid) {
-  int len;
-  struct iplink_req req;
-
   if (rtnl_open(&rth, 0) < 0) {
     fprintf(stderr, "cannot open netlink\n");
     return 1;
   }
 
+  struct iplink_req req;
   memset(&req, 0, sizeof(req));
-
   req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
   req.n.nlmsg_flags = NLM_F_REQUEST|NLM_F_CREATE|NLM_F_EXCL;
   req.n.nlmsg_type = RTM_NEWLINK;
@@ -104,6 +95,30 @@ net_create_ipvlan(const char *host_dev, const char *dev, int type,
   // add host
   addattr_l(&req.n, sizeof(req), IFLA_LINK, &host_ifindex,
             sizeof(host_ifindex));
+
+  // add new interface name
+  addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, strlen(dev) + 1);
+
+  // place the link in the child namespace
+  addattr_l(&req.n, sizeof(req), IFLA_NET_NS_PID, &pid, sizeof(pid));
+
+  // add link info for the new interface
+  struct rtattr *linkinfo = NLMSG_TAIL(&req.n);
+  addattr_l(&req.n, sizeof(req), IFLA_LINKINFO, NULL, 0);
+  addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, "ipvlan", strlen("ipvlan"));
+
+  struct rtattr *data = NLMSG_TAIL(&req.n);
+  addattr_l(&req.n, sizeof(req), IFLA_INFO_DATA, NULL, 0);
+  addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, &type, sizeof(type));
+
+  data->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)data;
+  linkinfo->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)linkinfo;
+
+  // send message
+  if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+    return 1;
+  }
+  rtnl_close(&rth);
 
   return 0;
 }

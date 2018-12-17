@@ -19,14 +19,28 @@ type DHCPReply struct {
 	LeaseTime  time.Duration
 }
 
-func DHCPApply(interf *net.Interface) (reply DHCPReply, err error) {
+func DHCPApply(interf *net.Interface, timeout time.Duration) (
+	reply DHCPReply, err error) {
 	conn, err := transport.NewUDPBroadcastRawConn(interf,
 		dhcp.CLIENT_PORT, dhcp.SERVER_PORT)
 	if err != nil {
 		return
 	}
 	defer conn.Close()
-	buf := make([]byte, 1024)
+
+	if timeout > 0 {
+		end := make(chan struct{})
+		timer := time.NewTimer(timeout)
+		defer close(end)
+
+		go func() {
+			select {
+			case <-end:
+			case <-timer.C:
+			}
+			conn.Close()
+		}()
+	}
 
 	// discover
 	msg := dhcp.NewMessageForInterface(interf)
@@ -37,6 +51,7 @@ func DHCPApply(interf *net.Interface) (reply DHCPReply, err error) {
 	}
 
 	// offer
+	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
 	if err != nil {
 		return
