@@ -16,11 +16,11 @@ target = "/root/workspace"
 
 [network]
 
-[[network.interface]]
-name = "eth0"
-type = "bridge"
-mask = "255.255.255.0"
-ip = "172.20.1.11"
+# [[network.interface]]
+# name = "eth0"
+# type = "bridge"
+# mask = "255.255.255.0"
+# ip = "172.20.1.11"
 
 # [[network.interface]]
 # name = "eth1"

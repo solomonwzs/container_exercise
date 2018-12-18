@@ -353,11 +353,10 @@ func (conf CNIIPvlan) BuildNetwork() (err error) {
 	// 	"type", "ipvlan", "mode", conf.Mode)
 	// csys.SystemCmd("ip", "link",
 	// 	"set", conf.VName, "netns", conf.Pid)
-	C.net_create_ipvlan(
-		C.CString(conf.HostInterface),
-		C.CString(conf.VName),
-		conf._Mode,
-		conf._Pid)
+	if C.net_create_ipvlan(C.CString(conf.HostInterface),
+		C.CString(conf.VName), conf._Mode, conf._Pid) != 0 {
+		return errors.New("create ipvlan failed")
+	}
 	return
 }
 

@@ -104,7 +104,9 @@ func main() {
 	networkBuilders := cnet.ParserNetworkBuilders(
 		process.Pid, conf.Network)
 	for _, builder := range networkBuilders {
-		builder.BuildNetwork()
+		if err = builder.BuildNetwork(); err != nil {
+			logger.Error(err)
+		}
 		defer builder.ReleaseNetwork()
 	}
 

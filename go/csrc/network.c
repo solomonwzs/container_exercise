@@ -1,8 +1,13 @@
 #include "network.h"
+#include "uapi/linux/sockios.h"
+
 #include <linux/veth.h>
+#include <net/if.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <net/if.h>
+#include <string.h>
+#include <stropts.h>
+#include <unistd.h>
 
 
 struct iplink_req {
@@ -14,16 +19,28 @@ struct iplink_req {
 static struct rtnl_handle rth = {.fd = -1};
 
 
-void
-foo() {
-  printf("hello world\n");
+static int
+get_ctl_fd() {
+  int fd;
+
+  if ((fd = socket(PF_INET, SOCK_DGRAM, 0)) >= 0) {
+    return fd;
+  }
+  if ((fd = socket(PF_PACKET, SOCK_DGRAM, 0)) >= 0) {
+    return fd;
+  }
+  if ((fd = socket(PF_INET6, SOCK_DGRAM, 0)) >= 0) {
+    return fd;
+  }
+
+  return -1;
 }
+
 
 int
 net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
   if (rtnl_open(&rth, 0) < 0) {
-    fprintf(stderr, "cannot open netlink\n");
-    return 1;
+    return -1;
   }
 
   struct iplink_req req;
@@ -62,7 +79,7 @@ net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
 
   // send message
   if (rtnl_talk(&rth, &req.n, NULL) < 0) {
-    return 1;
+    return -1;
   }
   rtnl_close(&rth);
 
@@ -74,8 +91,7 @@ int
 net_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
                   unsigned pid) {
   if (rtnl_open(&rth, 0) < 0) {
-    fprintf(stderr, "cannot open netlink\n");
-    return 1;
+    return -1;
   }
 
   struct iplink_req req;
@@ -88,8 +104,7 @@ net_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
   // find host ifindex
   int host_ifindex = if_nametoindex(host_dev);
   if (host_ifindex <= 0) {
-    fprintf(stderr, "Error: cannot find network device %s\n", host_dev);
-    exit(1);
+    return -1;
   }
 
   // add host
@@ -116,9 +131,30 @@ net_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
 
   // send message
   if (rtnl_talk(&rth, &req.n, NULL) < 0) {
-    return 1;
+    return -1;
   }
+
   rtnl_close(&rth);
+
+  return 0;
+}
+
+
+int
+net_rename(const char *dev, const char *newdev) {
+  struct ifreq ifr;
+  strncpy(ifr.ifr_ifrn.ifrn_name, dev, IF_NAMESIZE);
+  strncpy(ifr.ifr_ifru.ifru_newname, newdev, IF_NAMESIZE);
+
+  int fd = get_ctl_fd();
+  if (fd < 0) {
+    return -1;
+  }
+
+  if (ioctl(fd, SIOCSIFNAME, &ifr) != 0) {
+    close(fd);
+    return -1;
+  }
 
   return 0;
 }

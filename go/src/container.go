@@ -2,7 +2,6 @@ package main
 
 import (
 	"cnet"
-	"csys"
 	"encoding/binary"
 	"io"
 	"os"
@@ -77,7 +76,7 @@ func containerRun() {
 	mgrs := os.NewFile(uintptr(f1), "mgrs")
 	defer mgrs.Close()
 
-	csys.SystemCmd("id")
+	// csys.SystemCmd("id")
 
 	buf := make([]byte, 4)
 	mgrs.Read(buf)
