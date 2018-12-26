@@ -18,4 +18,7 @@ net_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
 extern int
 net_rename(const char *dev, const char *newdev);
 
+extern int
+net_chflags(const char *dev, uint32_t flags, uint32_t mask);
+
 #endif

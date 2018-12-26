@@ -156,5 +156,35 @@ net_rename(const char *dev, const char *newdev) {
     return -1;
   }
 
+  close(fd);
+  return 0;
+}
+
+
+int
+net_chflags(const char *dev, uint32_t flags, uint32_t mask) {
+  struct ifreq ifr;
+  strncpy(ifr.ifr_ifrn.ifrn_name, dev, IF_NAMESIZE);
+
+  int fd = get_ctl_fd();
+  if (fd < 0) {
+    return -1;
+  }
+
+  if (ioctl(fd, SIOCSIFNAME, &ifr) != 0) {
+    close(fd);
+    return -1;
+  }
+
+  if ((ifr.ifr_ifru.ifru_flags ^ flags) & mask) {
+    ifr.ifr_ifru.ifru_flags &= ~mask;
+    ifr.ifr_ifru.ifru_flags |= mask & flags;
+    if (ioctl(fd, SIOCSIFNAME, &ifr) != 0) {
+      close(fd);
+      return -1;
+    }
+  }
+
+  close(fd);
   return 0;
 }

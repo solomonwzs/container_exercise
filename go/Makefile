@@ -2,7 +2,7 @@
 
 C		= gcc
 AR		= ar
-CFLAGS	= -Wall -fpic -g -c -I./include
+CFLAGS	= -Wall -fpic -g -c -I./include -I./deps/iproute2/include
 C_PATH	= "csrc"
 C_SRC	= $(wildcard csrc/*.c)
 
@@ -24,6 +24,10 @@ obj:$(C_SRC:%.c=%.o)
 
 pre:
 	@[ -d $(BUILD_PATH) ] || mkdir $(BUILD_PATH)
+
+dep-iproute2:
+	@cd ./deps/iproute2 && ./configure
+	@make -C ./deps/iproute2
 
 libnetwork:pre obj
 	@$(AR) -rs $(BUILD_PATH)/libnetwork.a $(C_PATH)/*.o

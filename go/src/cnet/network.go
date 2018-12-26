@@ -246,7 +246,8 @@ func (conf _CNIVlan) ReleaseNetwork() (err error) { return }
 
 func (conf _CNIVlan) SetupNetwork() (err error) {
 	csys.SystemCmd("ip", "link", "set", "lo", "up")
-	csys.SystemCmd("ip", "link", "set", conf.VName, "name", conf.Name)
+	// csys.SystemCmd("ip", "link", "set", conf.VName, "name", conf.Name)
+	C.net_rename(C.CString(conf.VName), C.CString(conf.Name))
 	csys.SystemCmd("ip", "link", "set", conf.Name, "up")
 
 	addr, err := conf.getAddr()
