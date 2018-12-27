@@ -1,6 +1,7 @@
 package cnet
 
 /*
+#include "uapi/linux/if.h"
 #include "network.h"
 */
 import "C"
@@ -46,34 +47,46 @@ type NetworkBuilder interface {
 	SetupNetwork() error
 }
 
+func CheckIfName(name string) bool {
+	l := len(name)
+	if l == 0 || l > C.IFNAMSIZ {
+		return false
+	}
+	for i := 0; i < l; i++ {
+		if name[i] == '/' || name[i] == ' ' {
+			return false
+		}
+	}
+	return true
+}
+
 func ParserNetworkBuilders(cPid int, conf CNetwork) []NetworkBuilder {
 	nb := make([]NetworkBuilder, 0)
+	var builder NetworkBuilder
+	var err error
 	for _, netConf := range conf.Interfaces {
+		if !CheckIfName(netConf.Name) {
+			logger.Errorf("invalid name: %s\n", netConf.Name)
+			continue
+		}
+
 		switch netConf.Type {
 		case "bridge":
-			nb = append(nb, NewCNIBridge(cPid, netConf))
+			builder, err = NewCNIBridge(cPid, netConf)
 		case "vlan":
-			builder, err := NewCNIVlan(cPid, netConf)
-			if err != nil {
-				logger.Error(err)
-			} else {
-				nb = append(nb, builder)
-			}
+			builder, err = NewCNIVlan(cPid, netConf)
 		case "ipvlan":
-			builder, err := NewCNIIPvlan(cPid, netConf)
-			if err != nil {
-				logger.Error(err)
-			} else {
-				nb = append(nb, builder)
-			}
+			builder, err = NewCNIIPvlan(cPid, netConf)
 		case "macvlan":
-			builder, err := NewCNIMacvlan(cPid, netConf)
-			if err != nil {
-				logger.Error(err)
-			} else {
-				nb = append(nb, builder)
-			}
+			builder, err = NewCNIMacvlan(cPid, netConf)
 		default:
+			err = fmt.Errorf("invalid type: %s", netConf.Type)
+		}
+
+		if err != nil {
+			logger.Error(err)
+		} else {
+			nb = append(nb, builder)
 		}
 	}
 	return nb
@@ -119,20 +132,19 @@ type CNIBridge struct {
 	BridgeAddr string
 	BridgeName string
 	Name       string
-	Pid        string
+	Pid        int
 	RuleSrc    string
 	VethA      string
 	VethAddr   string
 	VethB      string
 }
 
-func NewCNIBridge(cPid int, conf CNetworkInterface) *CNIBridge {
+func NewCNIBridge(cPid int, conf CNetworkInterface) (*CNIBridge, error) {
 	devid := atomic.AddUint32(&devUniqID, 1)
-	pid := strconv.Itoa(cPid)
 
-	bridgeName := fmt.Sprintf("bridge%s-%d", pid, devid)
-	vethA := fmt.Sprintf("veth%s-%d", pid, devid)
-	vethB := fmt.Sprintf("veth%sx-%d", pid, devid)
+	bridgeName := fmt.Sprintf("bridge%d-%d", cPid, devid)
+	vethA := fmt.Sprintf("veth%d-%d", cPid, devid)
+	vethB := fmt.Sprintf("veth%dx-%d", cPid, devid)
 
 	mask := net.ParseIP(conf.Mask)
 	maskDec, _ := Ipv42Dec(mask)
@@ -150,28 +162,27 @@ func NewCNIBridge(cPid int, conf CNetworkInterface) *CNIBridge {
 		BridgeAddr: bridgeAddr,
 		BridgeName: bridgeName,
 		Name:       conf.Name,
-		Pid:        pid,
+		Pid:        cPid,
 		RuleSrc:    ruleSrc,
 		VethA:      vethA,
 		VethAddr:   vethAddr,
 		VethB:      vethB,
-	}
+	}, nil
 }
 
 func (conf CNIBridge) BuildNetwork() (err error) {
 	// create bridge
-	csys.SystemCmd("ip", "link",
-		"add", conf.BridgeName, "type", "bridge")
+	// csys.SystemCmd("ip", "link",
+	// 	"add", conf.BridgeName, "type", "bridge")
+	C.iplink_create_bridge(C.CString(conf.BridgeName))
 	csys.SystemCmd("ip", "addr",
 		"add", conf.BridgeAddr, "brd", "+", "dev", conf.BridgeName)
 	csys.SystemCmd("ip", "link",
 		"set", conf.BridgeName, "up")
 
 	// create a pair of veths
-	csys.SystemCmd("ip", "link",
-		"add", conf.VethA, "type", "veth", "peer", "name", conf.VethB)
-	csys.SystemCmd("ip", "link",
-		"set", conf.VethB, "netns", conf.Pid)
+	C.iplink_create_veth(C.CString(conf.VethA), C.CString(conf.VethB),
+		C.unsigned(conf.Pid))
 
 	// set veth to bridge
 	csys.SystemCmd("ip", "link",
@@ -203,9 +214,9 @@ func (conf CNIBridge) ReleaseNetwork() (err error) {
 }
 
 func (conf CNIBridge) SetupNetwork() (err error) {
-	csys.SystemCmd("ip", "link", "set", "lo", "up")
-	csys.SystemCmd("ip", "link", "set", conf.VethB, "name", conf.Name)
-	csys.SystemCmd("ip", "link", "set", conf.Name, "up")
+	C.iplink_rename(C.CString(conf.VethB), C.CString(conf.Name))
+	NewNetDevFlags("lo").SetUp(true).Commit()
+	NewNetDevFlags(conf.Name).SetUp(true).Commit()
 	csys.SystemCmd("ip", "addr", "add", conf.VethAddr, "dev", conf.Name)
 	return
 }
@@ -245,10 +256,9 @@ func (conf _CNIVlan) getAddr() (addr string, err error) {
 func (conf _CNIVlan) ReleaseNetwork() (err error) { return }
 
 func (conf _CNIVlan) SetupNetwork() (err error) {
-	csys.SystemCmd("ip", "link", "set", "lo", "up")
-	// csys.SystemCmd("ip", "link", "set", conf.VName, "name", conf.Name)
-	C.net_rename(C.CString(conf.VName), C.CString(conf.Name))
-	csys.SystemCmd("ip", "link", "set", conf.Name, "up")
+	C.iplink_rename(C.CString(conf.VName), C.CString(conf.Name))
+	NewNetDevFlags("lo").SetUp(true).Commit()
+	NewNetDevFlags(conf.Name).SetUp(true).Commit()
 
 	addr, err := conf.getAddr()
 	if err != nil {
@@ -329,6 +339,8 @@ func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
 		mode = C.IPVLAN_MODE_L2
 	case "l3":
 		mode = C.IPVLAN_MODE_L3
+	case "l3s":
+		mode = C.IPVLAN_MODE_L3S
 	default:
 		return CNIIPvlan{}, nil
 	}
@@ -349,12 +361,7 @@ func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
 }
 
 func (conf CNIIPvlan) BuildNetwork() (err error) {
-	// csys.SystemCmd("ip", "link",
-	// 	"add", "link", conf.HostInterface, "name", conf.VName,
-	// 	"type", "ipvlan", "mode", conf.Mode)
-	// csys.SystemCmd("ip", "link",
-	// 	"set", conf.VName, "netns", conf.Pid)
-	if C.net_create_ipvlan(C.CString(conf.HostInterface),
+	if C.iplink_create_ipvlan(C.CString(conf.HostInterface),
 		C.CString(conf.VName), conf._Mode, conf._Pid) != 0 {
 		return errors.New("create ipvlan failed")
 	}

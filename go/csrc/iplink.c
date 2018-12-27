@@ -16,8 +16,6 @@ struct iplink_req {
   char              buf[1024];
 };
 
-static struct rtnl_handle rth = {.fd = -1};
-
 
 static int
 get_ctl_fd() {
@@ -38,11 +36,7 @@ get_ctl_fd() {
 
 
 int
-net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
-  if (rtnl_open(&rth, 0) < 0) {
-    return -1;
-  }
-
+iplink_create_bridge(const char *dev) {
   struct iplink_req req;
   memset(&req, 0, sizeof(req));
   req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
@@ -50,9 +44,37 @@ net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
   req.n.nlmsg_type = RTM_NEWLINK;
   req.i.ifi_family = 0;
 
-  if (dev) {
-    addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, strlen(dev) + 1);
+  addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, strlen(dev) + 1);
+
+  struct rtattr *linkinfo = linkinfo = addattr_nest(
+      &req.n, sizeof(req), IFLA_LINKINFO);
+  addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, "bridge", strlen("bridge"));
+  addattr_nest_end(&req.n, linkinfo);
+
+  struct rtnl_handle rth = {.fd = -1};
+  if (rtnl_open(&rth, 0) < 0) {
+    return -1;
   }
+  if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+    rtnl_close(&rth);
+    return -1;
+  }
+  rtnl_close(&rth);
+
+  return 0;
+}
+
+
+int
+iplink_create_veth(const char *dev, const char *nsdev, unsigned pid) {
+  struct iplink_req req;
+  memset(&req, 0, sizeof(req));
+  req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+  req.n.nlmsg_flags = NLM_F_REQUEST|NLM_F_CREATE|NLM_F_EXCL;
+  req.n.nlmsg_type = RTM_NEWLINK;
+  req.i.ifi_family = 0;
+
+  addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, strlen(dev) + 1);
 
   // add link info for the new interface
   struct rtattr *linkinfo = NLMSG_TAIL(&req.n);
@@ -77,8 +99,12 @@ net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
   data->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)data;
   linkinfo->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)linkinfo;
 
-  // send message
+  struct rtnl_handle rth = {.fd = -1};
+  if (rtnl_open(&rth, 0) < 0) {
+    return -1;
+  }
   if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+    rtnl_close(&rth);
     return -1;
   }
   rtnl_close(&rth);
@@ -88,12 +114,8 @@ net_create_veth(const char *dev, const char *nsdev, unsigned pid) {
 
 
 int
-net_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
-                  unsigned pid) {
-  if (rtnl_open(&rth, 0) < 0) {
-    return -1;
-  }
-
+iplink_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
+                     unsigned pid) {
   struct iplink_req req;
   memset(&req, 0, sizeof(req));
   req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
@@ -129,11 +151,14 @@ net_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
   data->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)data;
   linkinfo->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)linkinfo;
 
-  // send message
-  if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+  struct rtnl_handle rth = {.fd = -1};
+  if (rtnl_open(&rth, 0) < 0) {
     return -1;
   }
-
+  if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+    rtnl_close(&rth);
+    return -1;
+  }
   rtnl_close(&rth);
 
   return 0;
@@ -141,7 +166,7 @@ net_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
 
 
 int
-net_rename(const char *dev, const char *newdev) {
+iplink_rename(const char *dev, const char *newdev) {
   struct ifreq ifr;
   strncpy(ifr.ifr_ifrn.ifrn_name, dev, IF_NAMESIZE);
   strncpy(ifr.ifr_ifru.ifru_newname, newdev, IF_NAMESIZE);
@@ -162,29 +187,31 @@ net_rename(const char *dev, const char *newdev) {
 
 
 int
-net_chflags(const char *dev, uint32_t flags, uint32_t mask) {
-  struct ifreq ifr;
-  strncpy(ifr.ifr_ifrn.ifrn_name, dev, IF_NAMESIZE);
-
-  int fd = get_ctl_fd();
-  if (fd < 0) {
+iplink_chflags(const char *dev, uint32_t flags, uint32_t mask) {
+  int ifindex = if_nametoindex(dev);
+  if (ifindex <= 0) {
     return -1;
   }
 
-  if (ioctl(fd, SIOCSIFNAME, &ifr) != 0) {
-    close(fd);
+  struct iplink_req req;
+  memset(&req, 0, sizeof(req));
+  req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+  req.n.nlmsg_flags = NLM_F_REQUEST;
+  req.n.nlmsg_type = RTM_NEWLINK;
+  req.i.ifi_family = 0;
+  req.i.ifi_change = mask;
+  req.i.ifi_flags = flags;
+  req.i.ifi_index = ifindex;
+
+  struct rtnl_handle rth = {.fd = -1};
+  if (rtnl_open(&rth, 0) < 0) {
     return -1;
   }
-
-  if ((ifr.ifr_ifru.ifru_flags ^ flags) & mask) {
-    ifr.ifr_ifru.ifru_flags &= ~mask;
-    ifr.ifr_ifru.ifru_flags |= mask & flags;
-    if (ioctl(fd, SIOCSIFNAME, &ifr) != 0) {
-      close(fd);
-      return -1;
-    }
+  if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+    rtnl_close(&rth);
+    return -1;
   }
+  rtnl_close(&rth);
 
-  close(fd);
   return 0;
 }

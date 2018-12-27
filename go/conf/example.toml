@@ -16,11 +16,11 @@ target = "/root/workspace"
 
 [network]
 
-# [[network.interface]]
-# name = "eth0"
-# type = "bridge"
-# mask = "255.255.255.0"
-# ip = "172.20.1.11"
+[[network.interface]]
+name = "eth0"
+type = "bridge"
+mask = "255.255.255.0"
+ip = "172.20.1.11"
 
 # [[network.interface]]
 # name = "eth1"
@@ -30,11 +30,11 @@ target = "/root/workspace"
 # mask = "255.255.255.0"
 # ip = "192.168.197.133"
 
-[[network.interface]]
-name = "eth2"
-type = "ipvlan"
-host_interface = "eno1"
-mode = "l2" # l2 / l3
+# [[network.interface]]
+# name = "eth2"
+# type = "ipvlan"
+# host_interface = "eno1"
+# mode = "l2" # l2 / l3 / l3s
 # mask = "255.255.255.0"
 # ip = "192.168.197.134"
 
@@ -49,4 +49,5 @@ mode = "l2" # l2 / l3
 [[network.route]]
 dest = "0.0.0.0"
 mask = "0.0.0.0"
-gateway = "192.168.197.252"
+# gateway = "192.168.197.252"
+gateway = "172.20.1.1"
