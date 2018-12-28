@@ -18,6 +18,8 @@ import (
 	"github.com/solomonwzs/goxutil/logger"
 )
 
+const _IP_CMD = "/home/solomon/workspace/c/iproute2/ip/ip"
+
 type CNetwork struct {
 	Interfaces []CNetworkInterface `toml:"interface"`
 	Routes     []CNetworkRoute     `toml:"route"`
@@ -123,7 +125,7 @@ func AddNetworkRoutes(routes []CNetworkRoute) (err error) {
 		maskValidBits := MaskValidBits(mask)
 		dest := fmt.Sprintf("%s/%d", route.Dest, maskValidBits)
 
-		csys.SystemCmd("ip", "route", "add", dest, "via", route.Gateway)
+		csys.SystemCmd(_IP_CMD, "route", "add", dest, "via", route.Gateway)
 	}
 	return
 }
@@ -172,23 +174,19 @@ func NewCNIBridge(cPid int, conf CNetworkInterface) (*CNIBridge, error) {
 
 func (conf CNIBridge) BuildNetwork() (err error) {
 	// create bridge
-	// csys.SystemCmd("ip", "link",
-	// 	"add", conf.BridgeName, "type", "bridge")
 	C.iplink_create_bridge(C.CString(conf.BridgeName))
-	csys.SystemCmd("ip", "addr",
+	csys.SystemCmd(_IP_CMD, "addr",
 		"add", conf.BridgeAddr, "brd", "+", "dev", conf.BridgeName)
-	csys.SystemCmd("ip", "link",
-		"set", conf.BridgeName, "up")
+	NewNetDevFlags(conf.BridgeName).SetUp(true).Commit()
 
 	// create a pair of veths
 	C.iplink_create_veth(C.CString(conf.VethA), C.CString(conf.VethB),
 		C.unsigned(conf.Pid))
 
 	// set veth to bridge
-	csys.SystemCmd("ip", "link",
+	csys.SystemCmd(_IP_CMD, "link",
 		"set", conf.VethA, "master", conf.BridgeName)
-	csys.SystemCmd("ip", "link",
-		"set", conf.VethA, "up")
+	NewNetDevFlags(conf.VethA).SetUp(true).Commit()
 
 	// add iptables rule
 	csys.SystemCmd("sysctl", "-w", "net.ipv4.ip_forward=1")
@@ -208,7 +206,7 @@ func (conf CNIBridge) ReleaseNetwork() (err error) {
 		"-s", conf.RuleSrc,
 		"-j", "MASQUERADE")
 
-	csys.SystemCmd("ip", "link", "delete", conf.BridgeName, "type", "bridge")
+	C.iplink_delete_dev(C.CString(conf.BridgeName))
 
 	return
 }
@@ -217,7 +215,7 @@ func (conf CNIBridge) SetupNetwork() (err error) {
 	C.iplink_rename(C.CString(conf.VethB), C.CString(conf.Name))
 	NewNetDevFlags("lo").SetUp(true).Commit()
 	NewNetDevFlags(conf.Name).SetUp(true).Commit()
-	csys.SystemCmd("ip", "addr", "add", conf.VethAddr, "dev", conf.Name)
+	csys.SystemCmd(_IP_CMD, "addr", "add", conf.VethAddr, "dev", conf.Name)
 	return
 }
 
@@ -265,7 +263,7 @@ func (conf _CNIVlan) SetupNetwork() (err error) {
 		logger.Error(err)
 		return
 	}
-	csys.SystemCmd("ip", "addr", "add", addr, "dev", conf.Name)
+	csys.SystemCmd(_IP_CMD, "addr", "add", addr, "dev", conf.Name)
 	return
 }
 
@@ -299,10 +297,10 @@ func NewCNIVlan(cPid int, conf CNetworkInterface) (CNIVlan, error) {
 }
 
 func (conf CNIVlan) BuildNetwork() (err error) {
-	csys.SystemCmd("ip", "link",
+	csys.SystemCmd(_IP_CMD, "link",
 		"add", "link", conf.HostInterface, "name", conf.VName,
 		"type", "vlan", "id", conf.ID)
-	csys.SystemCmd("ip", "link",
+	csys.SystemCmd(_IP_CMD, "link",
 		"set", conf.VName, "netns", conf.Pid)
 	return
 }
@@ -411,10 +409,10 @@ func NewCNIMacvlan(cPid int, conf CNetworkInterface) (CNIMacvlan, error) {
 }
 
 func (conf CNIMacvlan) BuildNetwork() (err error) {
-	csys.SystemCmd("ip", "link",
+	csys.SystemCmd(_IP_CMD, "link",
 		"add", "link", conf.HostInterface, "name", conf.VName,
 		"type", "macvlan", "mode", conf.Mode)
-	csys.SystemCmd("ip", "link",
+	csys.SystemCmd(_IP_CMD, "link",
 		"set", conf.VName, "netns", conf.Pid)
 	return
 }

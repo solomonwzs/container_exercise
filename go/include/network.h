@@ -16,12 +16,18 @@ iplink_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
                   unsigned pid);
 
 extern int
+iplink_create_bridge(const char *dev);
+
+extern int
+iplink_set_master(const char *dev, const char *masterdev);
+
+extern int
+iplink_delete_dev(const char *dev);
+
+extern int
 iplink_rename(const char *dev, const char *newdev);
 
 extern int
 iplink_chflags(const char *dev, uint32_t flags, uint32_t mask);
-
-extern int
-iplink_create_bridge(const char *dev);
 
 #endif
