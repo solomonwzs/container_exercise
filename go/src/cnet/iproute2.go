@@ -4,9 +4,15 @@ package cnet
 #include "network.h"
 #include "uapi/linux/if.h"
 #include <errno.h>
+#include <stdlib.h>
+
+#define SIZEOF_PTR sizeof(void *)
 */
 import "C"
-import "errors"
+import (
+	"errors"
+	"unsafe"
+)
 
 const (
 	IFF_UP         = C.IFF_UP
@@ -108,4 +114,20 @@ func (f *NetDevFlags) Commit() error {
 		return errors.New("change flags fail")
 	}
 	return nil
+}
+
+func AddRoute(argv []string) int {
+	if len(argv) > 1024 {
+		return -1
+	}
+
+	arr := C.malloc(C.SIZEOF_PTR * C.size_t(len(argv)))
+	defer C.free(unsafe.Pointer(arr))
+
+	goArr := (*[1024]*C.char)(arr)
+	for i, str := range argv {
+		goArr[i] = C.CString(str)
+	}
+
+	return int(C.iproute_add(C.int(len(argv)), (**C.char)(arr)))
 }

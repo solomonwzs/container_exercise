@@ -11,7 +11,9 @@ GOPATH	:= ${BASE}:${GOPATH}
 GO		?= go
 GO_SRC	= "src"
 
-BUILD_PATH = "build"
+BUILD_PATH 		= "build"
+IPROUTE2_PATH 	= "./deps/iproute2"
+
 
 .c.o:
 	@echo -e "\033[0;33m*\033[0m $@"
@@ -26,11 +28,13 @@ pre:
 	@[ -d $(BUILD_PATH) ] || mkdir $(BUILD_PATH)
 
 dep-iproute2:
-	@cd ./deps/iproute2 && ./configure
-	@make -C ./deps/iproute2
+	@git submodule update
+	@cd $(IPROUTE2_PATH) && ./configure
+	@make -C $(IPROUTE2_PATH)
 
 libnetwork:pre obj
-	@$(AR) -rs $(BUILD_PATH)/libnetwork.a $(C_PATH)/*.o
+	@$(AR) -rs $(BUILD_PATH)/libnetwork.a $(C_PATH)/*.o \
+		$(IPROUTE2_PATH)/ip/rtm_map.o
 
 clean:
 	@rm $(C_PATH)/*.o

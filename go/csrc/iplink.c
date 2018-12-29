@@ -26,7 +26,7 @@ init_iplink_req(struct iplink_req *req, uint16_t type, uint16_t flags) {
   memset(req, 0, sizeof(struct iplink_req));
   req->n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
   req->n.nlmsg_type = type;
-  req->n.nlmsg_flags = flags;
+  req->n.nlmsg_flags = NLM_F_REQUEST|flags;
   req->i.ifi_family = 0;
 }
 
@@ -64,6 +64,76 @@ send_message(struct nlmsghdr *n) {
 }
 
 
+static int
+iplink_create_xvlan(const char *host_dev, const char *dev, unsigned pid,
+                    const char *type, void *attri) {
+  int attr;
+  int len;
+  if (strcmp(type, "vlan") == 0) {
+    attr = IFLA_VLAN_ID;
+    len = 2;
+  } else if (strcmp(type, "ipvlan") == 0) {
+    attr = IFLA_INFO_KIND;
+    len = 2;
+  } else if (strcmp(type, "macvlan") == 0) {
+    attr = IFLA_INFO_KIND;
+    len = 4;
+  } else {
+    return -1;
+  }
+
+  struct iplink_req req;
+  init_iplink_req(&req, RTM_NEWLINK, NLM_F_CREATE|NLM_F_EXCL);
+
+  // find host ifindex
+  int host_ifindex = if_nametoindex(host_dev);
+  if (host_ifindex <= 0) {
+    return -1;
+  }
+  addattr_l(&req.n, sizeof(req), IFLA_LINK, &host_ifindex,
+            sizeof(host_ifindex));
+
+  // add new interface name
+  addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, strlen(dev) + 1);
+  // place the link in the child namespace
+  addattr_l(&req.n, sizeof(req), IFLA_NET_NS_PID, &pid, sizeof(pid));
+
+  struct rtattr *linkinfo = NLMSG_TAIL(&req.n);
+  addattr_l(&req.n, sizeof(req), IFLA_LINKINFO, NULL, 0);
+  addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, type, strlen(type));
+
+  struct rtattr *data = NLMSG_TAIL(&req.n);
+  addattr_l(&req.n, sizeof(req), IFLA_INFO_DATA, NULL, 0);
+  addattr_l(&req.n, sizeof(req), attr, attri, len);
+
+  SET_RTA_LEN(data, &req.n);
+  SET_RTA_LEN(linkinfo, &req.n);
+
+  return send_message(&req.n);
+}
+
+
+int
+iplink_create_vlan(const char *host_dev, const char *dev, unsigned pid,
+                   uint16_t vid) {
+  return iplink_create_xvlan(host_dev, dev, pid, "vlan", &vid);
+}
+
+
+int
+iplink_create_ipvlan(const char *host_dev, const char *dev, unsigned pid,
+                     uint16_t type) {
+  return iplink_create_xvlan(host_dev, dev, pid, "ipvlan", &type);
+}
+
+
+int
+iplink_create_macvlan(const char *host_dev, const char *dev, unsigned pid,
+                      uint32_t type) {
+  return iplink_create_xvlan(host_dev, dev, pid, "macvlan", &type);
+}
+
+
 int
 iplink_delete_dev(const char *dev) {
   int ifindex = if_nametoindex(dev);
@@ -72,7 +142,7 @@ iplink_delete_dev(const char *dev) {
   }
 
   struct iplink_req req;
-  init_iplink_req(&req, RTM_DELLINK, NLM_F_REQUEST);
+  init_iplink_req(&req, RTM_DELLINK, 0);
   req.i.ifi_index = ifindex;
 
   return send_message(&req.n);
@@ -82,7 +152,7 @@ iplink_delete_dev(const char *dev) {
 int
 iplink_create_bridge(const char *dev) {
   struct iplink_req req;
-  init_iplink_req(&req, RTM_NEWLINK, NLM_F_REQUEST|NLM_F_CREATE|NLM_F_EXCL);
+  init_iplink_req(&req, RTM_NEWLINK, NLM_F_CREATE|NLM_F_EXCL);
 
   addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, strlen(dev) + 1);
 
@@ -97,14 +167,29 @@ iplink_create_bridge(const char *dev) {
 
 int
 iplink_set_master(const char *dev, const char *masterdev) {
-  return 0;
+  int ifindex = if_nametoindex(dev);
+  if (ifindex <= 0) {
+    return -1;
+  }
+
+  struct iplink_req req;
+  init_iplink_req(&req, RTM_NEWLINK, 0);
+  req.i.ifi_index = ifindex;
+
+  int mifindex = if_nametoindex(masterdev);
+  if (mifindex <= 0) {
+    return -1;
+  }
+  addattr_l(&req.n, sizeof(req), IFLA_MASTER, &mifindex, sizeof(mifindex));
+
+  return send_message(&req.n);
 }
 
 
 int
 iplink_create_veth(const char *dev, const char *nsdev, unsigned pid) {
   struct iplink_req req;
-  init_iplink_req(&req, RTM_NEWLINK, NLM_F_REQUEST|NLM_F_CREATE|NLM_F_EXCL);
+  init_iplink_req(&req, RTM_NEWLINK, NLM_F_CREATE|NLM_F_EXCL);
 
   addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, strlen(dev) + 1);
 
@@ -125,44 +210,6 @@ iplink_create_veth(const char *dev, const char *nsdev, unsigned pid) {
   addattr_l(&req.n, sizeof(req), IFLA_IFNAME, nsdev, strlen(nsdev));
 
   SET_RTA_LEN(peerdata, &req.n);
-  SET_RTA_LEN(data, &req.n);
-  SET_RTA_LEN(linkinfo, &req.n);
-
-  return send_message(&req.n);
-}
-
-
-int
-iplink_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
-                     unsigned pid) {
-  struct iplink_req req;
-  init_iplink_req(&req, RTM_NEWLINK, NLM_F_REQUEST|NLM_F_CREATE|NLM_F_EXCL);
-
-  // find host ifindex
-  int host_ifindex = if_nametoindex(host_dev);
-  if (host_ifindex <= 0) {
-    return -1;
-  }
-
-  // add host
-  addattr_l(&req.n, sizeof(req), IFLA_LINK, &host_ifindex,
-            sizeof(host_ifindex));
-
-  // add new interface name
-  addattr_l(&req.n, sizeof(req), IFLA_IFNAME, dev, strlen(dev) + 1);
-
-  // place the link in the child namespace
-  addattr_l(&req.n, sizeof(req), IFLA_NET_NS_PID, &pid, sizeof(pid));
-
-  // add link info for the new interface
-  struct rtattr *linkinfo = NLMSG_TAIL(&req.n);
-  addattr_l(&req.n, sizeof(req), IFLA_LINKINFO, NULL, 0);
-  addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, "ipvlan", strlen("ipvlan"));
-
-  struct rtattr *data = NLMSG_TAIL(&req.n);
-  addattr_l(&req.n, sizeof(req), IFLA_INFO_DATA, NULL, 0);
-  addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, &type, sizeof(type));
-
   SET_RTA_LEN(data, &req.n);
   SET_RTA_LEN(linkinfo, &req.n);
 
@@ -199,7 +246,7 @@ iplink_chflags(const char *dev, uint32_t flags, uint32_t mask) {
   }
 
   struct iplink_req req;
-  init_iplink_req(&req, RTM_NEWLINK, NLM_F_REQUEST);
+  init_iplink_req(&req, RTM_NEWLINK, 0);
   req.i.ifi_change = mask;
   req.i.ifi_flags = flags;
   req.i.ifi_index = ifindex;

@@ -126,6 +126,7 @@ func AddNetworkRoutes(routes []CNetworkRoute) (err error) {
 		dest := fmt.Sprintf("%s/%d", route.Dest, maskValidBits)
 
 		csys.SystemCmd(_IP_CMD, "route", "add", dest, "via", route.Gateway)
+		// AddRoute([]string{dest, "via", route.Gateway})
 	}
 	return
 }
@@ -184,8 +185,7 @@ func (conf CNIBridge) BuildNetwork() (err error) {
 		C.unsigned(conf.Pid))
 
 	// set veth to bridge
-	csys.SystemCmd(_IP_CMD, "link",
-		"set", conf.VethA, "master", conf.BridgeName)
+	C.iplink_set_master(C.CString(conf.VethA), C.CString(conf.BridgeName))
 	NewNetDevFlags(conf.VethA).SetUp(true).Commit()
 
 	// add iptables rule
@@ -223,7 +223,7 @@ type _CNIVlan struct {
 	HostInterface string
 	VName         string
 	Name          string
-	Pid           string
+	Pid           int
 	IP            net.IP
 	Mask          net.IP
 }
@@ -269,11 +269,10 @@ func (conf _CNIVlan) SetupNetwork() (err error) {
 
 type CNIVlan struct {
 	_CNIVlan
-	ID string
+	ID uint16
 }
 
 func NewCNIVlan(cPid int, conf CNetworkInterface) (CNIVlan, error) {
-	pid := strconv.Itoa(cPid)
 	vname := fmt.Sprintf("vlan-%s", conf.ID)
 	mask := net.ParseIP(conf.Mask)
 	ip := net.ParseIP(conf.IP)
@@ -283,33 +282,36 @@ func NewCNIVlan(cPid int, conf CNetworkInterface) (CNIVlan, error) {
 			conf.IP, conf.Mask)
 	}
 
+	id, err := strconv.ParseUint(conf.ID, 10, 16)
+	if err != nil {
+		return CNIVlan{}, fmt.Errorf("invalid vlan id: %s", conf.ID)
+	}
+
 	return CNIVlan{
 		_CNIVlan: _CNIVlan{
 			HostInterface: conf.HostInterface,
-			Pid:           pid,
+			Pid:           cPid,
 			VName:         vname,
 			Name:          conf.Name,
 			IP:            ip,
 			Mask:          mask,
 		},
-		ID: conf.ID,
+		ID: uint16(id),
 	}, nil
 }
 
 func (conf CNIVlan) BuildNetwork() (err error) {
-	csys.SystemCmd(_IP_CMD, "link",
-		"add", "link", conf.HostInterface, "name", conf.VName,
-		"type", "vlan", "id", conf.ID)
-	csys.SystemCmd(_IP_CMD, "link",
-		"set", conf.VName, "netns", conf.Pid)
+	if C.iplink_create_vlan(C.CString(conf.HostInterface),
+		C.CString(conf.VName), C.unsigned(conf.Pid),
+		C.uint16_t(conf.ID)) != 0 {
+		return errors.New("create vlan failed")
+	}
 	return
 }
 
 type CNIIPvlan struct {
 	_CNIVlan
-	Mode  string
-	_Pid  C.unsigned
-	_Mode C.uint16_t
+	Mode uint16
 }
 
 func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
@@ -319,7 +321,7 @@ func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
 		vname string = fmt.Sprintf("ipv%s-%d", pid, devid)
 		ip    net.IP
 		mask  net.IP
-		mode  C.uint16_t
+		mode  uint16
 	)
 
 	if conf.IP != "" {
@@ -340,27 +342,26 @@ func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
 	case "l3s":
 		mode = C.IPVLAN_MODE_L3S
 	default:
-		return CNIIPvlan{}, nil
+		return CNIIPvlan{}, fmt.Errorf("invalid mode: %s", conf.Mode)
 	}
 
 	return CNIIPvlan{
 		_CNIVlan: _CNIVlan{
 			HostInterface: conf.HostInterface,
-			Pid:           pid,
+			Pid:           cPid,
 			VName:         vname,
 			Name:          conf.Name,
 			IP:            ip,
 			Mask:          mask,
 		},
-		_Pid:  C.unsigned(cPid),
-		_Mode: mode,
-		Mode:  conf.Mode,
+		Mode: mode,
 	}, nil
 }
 
 func (conf CNIIPvlan) BuildNetwork() (err error) {
 	if C.iplink_create_ipvlan(C.CString(conf.HostInterface),
-		C.CString(conf.VName), conf._Mode, conf._Pid) != 0 {
+		C.CString(conf.VName), C.unsigned(conf.Pid),
+		C.uint16_t(conf.Mode)) != 0 {
 		return errors.New("create ipvlan failed")
 	}
 	return
@@ -368,7 +369,7 @@ func (conf CNIIPvlan) BuildNetwork() (err error) {
 
 type CNIMacvlan struct {
 	_CNIVlan
-	Mode string
+	Mode uint32
 }
 
 func NewCNIMacvlan(cPid int, conf CNetworkInterface) (CNIMacvlan, error) {
@@ -378,6 +379,7 @@ func NewCNIMacvlan(cPid int, conf CNetworkInterface) (CNIMacvlan, error) {
 		vname string = fmt.Sprintf("macv%s-%d", pid, devid)
 		ip    net.IP
 		mask  net.IP
+		mode  uint32
 	)
 
 	if conf.IP != "" {
@@ -390,29 +392,35 @@ func NewCNIMacvlan(cPid int, conf CNetworkInterface) (CNIMacvlan, error) {
 		}
 	}
 
-	if conf.Mode != "bridge" && conf.Mode != "vepa" &&
-		conf.Mode != "private" {
-		return CNIMacvlan{}, nil
+	switch conf.Mode {
+	case "bridge":
+		mode = C.MACVLAN_MODE_BRIDGE
+	case "vepa":
+		mode = C.MACVLAN_MODE_VEPA
+	case "private":
+		mode = C.MACVLAN_MODE_PRIVATE
+	default:
+		return CNIMacvlan{}, fmt.Errorf("invalid mode: %s", conf.Mode)
 	}
 
 	return CNIMacvlan{
 		_CNIVlan: _CNIVlan{
 			HostInterface: conf.HostInterface,
-			Pid:           pid,
+			Pid:           cPid,
 			VName:         vname,
 			Name:          conf.Name,
 			IP:            ip,
 			Mask:          mask,
 		},
-		Mode: conf.Mode,
+		Mode: mode,
 	}, nil
 }
 
 func (conf CNIMacvlan) BuildNetwork() (err error) {
-	csys.SystemCmd(_IP_CMD, "link",
-		"add", "link", conf.HostInterface, "name", conf.VName,
-		"type", "macvlan", "mode", conf.Mode)
-	csys.SystemCmd(_IP_CMD, "link",
-		"set", conf.VName, "netns", conf.Pid)
+	if C.iplink_create_macvlan(C.CString(conf.HostInterface),
+		C.CString(conf.VName), C.unsigned(conf.Pid),
+		C.uint32_t(conf.Mode)) != 0 {
+		return errors.New("create macvlan failed")
+	}
 	return
 }

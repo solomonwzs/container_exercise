@@ -12,8 +12,15 @@ extern int
 iplink_create_veth(const char *dev, const char *nsdev, unsigned pid);
 
 extern int
-iplink_create_ipvlan(const char *host_dev, const char *dev, uint16_t type,
-                  unsigned pid);
+iplink_create_vlan(const char *host_dev, const char *dev, unsigned pid,
+                   uint16_t vid);
+extern int
+iplink_create_ipvlan(const char *host_dev, const char *dev, unsigned pid,
+                     uint16_t type);
+
+extern int
+iplink_create_macvlan(const char *host_dev, const char *dev, unsigned pid,
+                      uint32_t type);
 
 extern int
 iplink_create_bridge(const char *dev);
@@ -29,5 +36,8 @@ iplink_rename(const char *dev, const char *newdev);
 
 extern int
 iplink_chflags(const char *dev, uint32_t flags, uint32_t mask);
+
+extern int
+iproute_add(int argc, char **argv);
 
 #endif
