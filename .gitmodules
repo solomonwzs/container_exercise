@@ -1,3 +1,4 @@
 [submodule "go/deps/iproute2"]
 	path = go/deps/iproute2
-	url = git://git.kernel.org/pub/scm/network/iproute2/iproute2.git
+    url = git://git.kernel.org/pub/scm/network/iproute2/iproute2.git
+    commit = 2808241af54f9584d40f5a2293ef1d36986dc8ec

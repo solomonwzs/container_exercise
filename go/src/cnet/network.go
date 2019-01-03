@@ -1,11 +1,7 @@
 package cnet
 
-/*
-#include "uapi/linux/if.h"
-#include "network.h"
-*/
-import "C"
 import (
+	"C"
 	"csys"
 	"encoding/binary"
 	"errors"
@@ -51,7 +47,7 @@ type NetworkBuilder interface {
 
 func CheckIfName(name string) bool {
 	l := len(name)
-	if l == 0 || l > C.IFNAMSIZ {
+	if l == 0 || l > IFNAMSIZ {
 		return false
 	}
 	for i := 0; i < l; i++ {
@@ -174,16 +170,15 @@ func NewCNIBridge(cPid int, conf CNetworkInterface) (*CNIBridge, error) {
 
 func (conf CNIBridge) BuildNetwork() (err error) {
 	// create bridge
-	C.iplink_create_bridge(C.CString(conf.BridgeName))
+	CreateBridge(conf.BridgeName)
 	AddAddr([]string{conf.BridgeAddr, "brd", "+", "dev", conf.BridgeName})
 	NewNetDevFlags(conf.BridgeName).SetUp(true).Commit()
 
 	// create a pair of veths
-	C.iplink_create_veth(C.CString(conf.VethA), C.CString(conf.VethB),
-		C.unsigned(conf.Pid))
+	CreateVeths(conf.VethA, conf.VethB, conf.Pid)
 
 	// set veth to bridge
-	C.iplink_set_master(C.CString(conf.VethA), C.CString(conf.BridgeName))
+	SetDevMaster(conf.VethA, conf.BridgeName)
 	NewNetDevFlags(conf.VethA).SetUp(true).Commit()
 
 	// add iptables rule
@@ -204,13 +199,13 @@ func (conf CNIBridge) ReleaseNetwork() (err error) {
 		"-s", conf.RuleSrc,
 		"-j", "MASQUERADE")
 
-	C.iplink_delete_dev(C.CString(conf.BridgeName))
+	DeleteDev(conf.BridgeName)
 
 	return
 }
 
 func (conf CNIBridge) SetupNetwork() (err error) {
-	C.iplink_rename(C.CString(conf.VethB), C.CString(conf.Name))
+	RenameDev(conf.VethB, conf.Name)
 	NewNetDevFlags("lo").SetUp(true).Commit()
 	NewNetDevFlags(conf.Name).SetUp(true).Commit()
 	AddAddr([]string{conf.VethAddr, "dev", conf.Name})
@@ -252,7 +247,7 @@ func (conf _CNIVlan) getAddr() (addr string, err error) {
 func (conf _CNIVlan) ReleaseNetwork() (err error) { return }
 
 func (conf _CNIVlan) SetupNetwork() (err error) {
-	C.iplink_rename(C.CString(conf.VName), C.CString(conf.Name))
+	RenameDev(conf.VName, conf.Name)
 	NewNetDevFlags("lo").SetUp(true).Commit()
 	NewNetDevFlags(conf.Name).SetUp(true).Commit()
 
@@ -299,12 +294,7 @@ func NewCNIVlan(cPid int, conf CNetworkInterface) (CNIVlan, error) {
 }
 
 func (conf CNIVlan) BuildNetwork() (err error) {
-	if C.iplink_create_vlan(C.CString(conf.HostInterface),
-		C.CString(conf.VName), C.unsigned(conf.Pid),
-		C.uint16_t(conf.ID)) != 0 {
-		return errors.New("create vlan failed")
-	}
-	return
+	return CreateVlan(conf.HostInterface, conf.VName, conf.Pid, conf.ID)
 }
 
 type CNIIPvlan struct {
@@ -334,11 +324,11 @@ func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
 
 	switch conf.Mode {
 	case "l2":
-		mode = C.IPVLAN_MODE_L2
+		mode = IPVLAN_MODE_L2
 	case "l3":
-		mode = C.IPVLAN_MODE_L3
+		mode = IPVLAN_MODE_L3
 	case "l3s":
-		mode = C.IPVLAN_MODE_L3S
+		mode = IPVLAN_MODE_L3S
 	default:
 		return CNIIPvlan{}, fmt.Errorf("invalid mode: %s", conf.Mode)
 	}
@@ -357,12 +347,7 @@ func NewCNIIPvlan(cPid int, conf CNetworkInterface) (CNIIPvlan, error) {
 }
 
 func (conf CNIIPvlan) BuildNetwork() (err error) {
-	if C.iplink_create_ipvlan(C.CString(conf.HostInterface),
-		C.CString(conf.VName), C.unsigned(conf.Pid),
-		C.uint16_t(conf.Mode)) != 0 {
-		return errors.New("create ipvlan failed")
-	}
-	return
+	return CreateIPVlan(conf.HostInterface, conf.VName, conf.Pid, conf.Mode)
 }
 
 type CNIMacvlan struct {
@@ -392,11 +377,11 @@ func NewCNIMacvlan(cPid int, conf CNetworkInterface) (CNIMacvlan, error) {
 
 	switch conf.Mode {
 	case "bridge":
-		mode = C.MACVLAN_MODE_BRIDGE
+		mode = MACVLAN_MODE_BRIDGE
 	case "vepa":
-		mode = C.MACVLAN_MODE_VEPA
+		mode = MACVLAN_MODE_VEPA
 	case "private":
-		mode = C.MACVLAN_MODE_PRIVATE
+		mode = MACVLAN_MODE_PRIVATE
 	default:
 		return CNIMacvlan{}, fmt.Errorf("invalid mode: %s", conf.Mode)
 	}
@@ -415,10 +400,5 @@ func NewCNIMacvlan(cPid int, conf CNetworkInterface) (CNIMacvlan, error) {
 }
 
 func (conf CNIMacvlan) BuildNetwork() (err error) {
-	if C.iplink_create_macvlan(C.CString(conf.HostInterface),
-		C.CString(conf.VName), C.unsigned(conf.Pid),
-		C.uint32_t(conf.Mode)) != 0 {
-		return errors.New("create macvlan failed")
-	}
-	return
+	return CreateMACVlan(conf.HostInterface, conf.VName, conf.Pid, conf.Mode)
 }
