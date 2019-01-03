@@ -1,7 +1,6 @@
 package cnet
 
 import (
-	"C"
 	"csys"
 	"encoding/binary"
 	"errors"
