@@ -49,21 +49,6 @@ get_ctl_fd() {
 }
 
 
-static inline int
-send_message(struct nlmsghdr *n) {
-  struct rtnl_handle rth = {.fd = -1};
-  if (rtnl_open(&rth, 0) < 0) {
-    return -1;
-  }
-  if (rtnl_talk(&rth, n, NULL) < 0) {
-    rtnl_close(&rth);
-    return -1;
-  }
-  rtnl_close(&rth);
-  return 0;
-}
-
-
 static int
 iplink_create_xvlan(const char *host_dev, const char *dev, unsigned pid,
                     const char *type, void *attri) {
@@ -109,7 +94,7 @@ iplink_create_xvlan(const char *host_dev, const char *dev, unsigned pid,
   SET_RTA_LEN(data, &req.n);
   SET_RTA_LEN(linkinfo, &req.n);
 
-  return send_message(&req.n);
+  return send_rtnl_message(&req.n);
 }
 
 
@@ -145,7 +130,7 @@ iplink_delete_dev(const char *dev) {
   init_iplink_req(&req, RTM_DELLINK, 0);
   req.i.ifi_index = ifindex;
 
-  return send_message(&req.n);
+  return send_rtnl_message(&req.n);
 }
 
 
@@ -161,7 +146,7 @@ iplink_create_bridge(const char *dev) {
   addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, "bridge", strlen("bridge"));
   SET_RTA_LEN(linkinfo, &req.n);
 
-  return send_message(&req.n);
+  return send_rtnl_message(&req.n);
 }
 
 
@@ -182,7 +167,7 @@ iplink_set_master(const char *dev, const char *masterdev) {
   }
   addattr_l(&req.n, sizeof(req), IFLA_MASTER, &mifindex, sizeof(mifindex));
 
-  return send_message(&req.n);
+  return send_rtnl_message(&req.n);
 }
 
 
@@ -213,7 +198,7 @@ iplink_create_veth(const char *dev, const char *nsdev, unsigned pid) {
   SET_RTA_LEN(data, &req.n);
   SET_RTA_LEN(linkinfo, &req.n);
 
-  return send_message(&req.n);
+  return send_rtnl_message(&req.n);
 }
 
 
@@ -251,5 +236,5 @@ iplink_chflags(const char *dev, uint32_t flags, uint32_t mask) {
   req.i.ifi_flags = flags;
   req.i.ifi_index = ifindex;
 
-  return send_message(&req.n);
+  return send_rtnl_message(&req.n);
 }

@@ -8,6 +8,11 @@
 #define IPVLAN_MODE_L2 0
 #endif
 
+#define _NEXT_ARG do { argc--; argv++; } while (0)
+
+extern int
+send_rtnl_message(struct nlmsghdr *n);
+
 extern int
 iplink_create_veth(const char *dev, const char *nsdev, unsigned pid);
 
@@ -39,5 +44,8 @@ iplink_chflags(const char *dev, uint32_t flags, uint32_t mask);
 
 extern int
 iproute_add(int argc, char **argv);
+
+extern int
+ipaddr_add(int argc, char **argv);
 
 #endif

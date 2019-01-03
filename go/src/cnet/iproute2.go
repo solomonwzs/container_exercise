@@ -131,3 +131,19 @@ func AddRoute(argv []string) int {
 
 	return int(C.iproute_add(C.int(len(argv)), (**C.char)(arr)))
 }
+
+func AddAddr(argv []string) int {
+	if len(argv) > 1024 {
+		return -1
+	}
+
+	arr := C.malloc(C.SIZEOF_PTR * C.size_t(len(argv)))
+	defer C.free(unsafe.Pointer(arr))
+
+	goArr := (*[1024]*C.char)(arr)
+	for i, str := range argv {
+		goArr[i] = C.CString(str)
+	}
+
+	return int(C.ipaddr_add(C.int(len(argv)), (**C.char)(arr)))
+}

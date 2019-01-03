@@ -125,8 +125,7 @@ func AddNetworkRoutes(routes []CNetworkRoute) (err error) {
 		maskValidBits := MaskValidBits(mask)
 		dest := fmt.Sprintf("%s/%d", route.Dest, maskValidBits)
 
-		csys.SystemCmd(_IP_CMD, "route", "add", dest, "via", route.Gateway)
-		// AddRoute([]string{dest, "via", route.Gateway})
+		AddRoute([]string{dest, "via", route.Gateway})
 	}
 	return
 }
@@ -176,8 +175,7 @@ func NewCNIBridge(cPid int, conf CNetworkInterface) (*CNIBridge, error) {
 func (conf CNIBridge) BuildNetwork() (err error) {
 	// create bridge
 	C.iplink_create_bridge(C.CString(conf.BridgeName))
-	csys.SystemCmd(_IP_CMD, "addr",
-		"add", conf.BridgeAddr, "brd", "+", "dev", conf.BridgeName)
+	AddAddr([]string{conf.BridgeAddr, "brd", "+", "dev", conf.BridgeName})
 	NewNetDevFlags(conf.BridgeName).SetUp(true).Commit()
 
 	// create a pair of veths
@@ -215,7 +213,7 @@ func (conf CNIBridge) SetupNetwork() (err error) {
 	C.iplink_rename(C.CString(conf.VethB), C.CString(conf.Name))
 	NewNetDevFlags("lo").SetUp(true).Commit()
 	NewNetDevFlags(conf.Name).SetUp(true).Commit()
-	csys.SystemCmd(_IP_CMD, "addr", "add", conf.VethAddr, "dev", conf.Name)
+	AddAddr([]string{conf.VethAddr, "dev", conf.Name})
 	return
 }
 
@@ -263,7 +261,7 @@ func (conf _CNIVlan) SetupNetwork() (err error) {
 		logger.Error(err)
 		return
 	}
-	csys.SystemCmd(_IP_CMD, "addr", "add", addr, "dev", conf.Name)
+	AddAddr([]string{addr, "dev", conf.Name})
 	return
 }
 
