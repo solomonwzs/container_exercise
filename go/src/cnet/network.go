@@ -13,8 +13,6 @@ import (
 	"github.com/solomonwzs/goxutil/logger"
 )
 
-const _IP_CMD = "/home/solomon/workspace/c/iproute2/ip/ip"
-
 type CNetwork struct {
 	Interfaces []CNetworkInterface `toml:"interface"`
 	Routes     []CNetworkRoute     `toml:"route"`
