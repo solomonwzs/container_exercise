@@ -22,7 +22,7 @@ var mountList = []mountArgs{
 	mountArgs{"proc", "/proc", "proc", 0, ""},
 	mountArgs{"sysfs", "/sys", "sysfs", 0, ""},
 	mountArgs{"none", "/tmp", "tmpfs", 0, ""},
-	// mountArgs{"udev", "/dev", "devtmpfs", 0, ""},
+	mountArgs{"udev", "/dev", "devtmpfs", 0, ""},
 	mountArgs{"devpts", "/dev/pts", "devpts", 0, ""},
 	mountArgs{"shm", "/dev/shm", "tmpfs", 0, ""},
 	mountArgs{"tmpfs", "/run", "tmpfs", 0, ""},
@@ -135,7 +135,7 @@ func BuildBaseFiles(conf *Configuration) (err error) {
 		target := filepath.Join(mergePath, args.target)
 		if err0 := syscall.Mount(args.src, target, args.ftype,
 			args.flags, args.data); err0 != nil {
-			logger.Error(err0)
+			logger.Error(args, err0)
 		}
 	}
 
