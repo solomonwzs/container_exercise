@@ -1,12 +1,13 @@
 package main
 
 import (
+	"csys"
 	"path/filepath"
 	"syscall"
 )
 
 func NamespacesID(ns string) string {
-	path := filepath.Join(_PATH_PROC_NAMESPACE, ns)
+	path := filepath.Join(csys.PATH_PROC_NAMESPACE, ns)
 	buf := make([]byte, 64)
 	syscall.Readlink(path, buf)
 

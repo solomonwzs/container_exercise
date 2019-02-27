@@ -1,12 +1,13 @@
-package main
+package csys
 
 import "fmt"
 
 const (
-	_PATH_PROC_NAMESPACE = "/proc/self/ns"
-	_PATH_PROC_BINARY    = "/proc/self/exe"
-	_PATH_PROC_UID_MAP   = "/proc/self/uid_map"
-	_PATH_PROC_GID_MAP   = "/proc/self/uid_map"
+	PATH_PROC_NAMESPACE = "/proc/self/ns"
+	PATH_PROC_BINARY    = "/proc/self/exe"
+	PATH_PROC_UID_MAP   = "/proc/self/uid_map"
+	PATH_PROC_GID_MAP   = "/proc/self/uid_map"
+	PATH_PROC_MOUNTINFO = "/proc/self/mountinfo"
 )
 
 func PathProcUidMap(pid int) string {
@@ -39,4 +40,8 @@ func PathProcNsUTS(pid int) string {
 
 func PathProcNsUser(pid int) string {
 	return fmt.Sprintf("/proc/%d/ns/user", pid)
+}
+
+func PathProcMountInfo(pid int) string {
+	return fmt.Sprintf("/proc/%d/mountinfo", pid)
 }

@@ -79,7 +79,7 @@ func ParserNetworkBuilders(cPid int, conf CNetwork) []NetworkBuilder {
 		}
 
 		if err != nil {
-			logger.Error(err)
+			logger.Errorln(err)
 		} else {
 			nb = append(nb, builder)
 		}
@@ -250,7 +250,7 @@ func (conf _CNIVlan) SetupNetwork() (err error) {
 
 	addr, err := conf.getAddr()
 	if err != nil {
-		logger.Error(err)
+		logger.Errorln(err)
 		return
 	}
 	AddAddr([]string{addr, "dev", conf.Name})

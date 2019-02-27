@@ -87,17 +87,17 @@ func MountCustomFiles(path string, customMountList []CMount) error {
 			if os.IsNotExist(err) {
 				os.MkdirAll(target, 0755)
 			} else {
-				logger.Error(err)
+				logger.Errorln(err)
 				continue
 			}
 		} else if !stat.Mode().IsDir() {
-			logger.Error(fmt.Errorf("non-dir: %s", stat.Name()))
+			logger.Errorln(fmt.Errorf("non-dir: %s", stat.Name()))
 			continue
 		}
 
 		if err = syscall.Mount(m.Source, target,
 			"none", syscall.MS_BIND, ""); err != nil {
-			logger.Error(err)
+			logger.Errorln(err)
 		}
 	}
 	return nil
@@ -108,7 +108,7 @@ func UmountCustomFiles(path string, customMountList []CMount) error {
 		m := customMountList[i]
 		target := filepath.Join(path, m.Target)
 		if err := syscall.Unmount(target, 0); err != nil {
-			logger.Error(err)
+			logger.Errorln(err)
 		}
 	}
 	return nil
@@ -135,24 +135,24 @@ func BuildBaseFiles(conf *Configuration) (err error) {
 		target := filepath.Join(mergePath, args.target)
 		if err0 := syscall.Mount(args.src, target, args.ftype,
 			args.flags, args.data); err0 != nil {
-			logger.Error(args, err0)
+			logger.Errorln(args, err0)
 		}
 	}
 
 	for _, fs := range copyFiles {
 		dest := filepath.Join(mergePath, fs[1])
 		if err0 := CopyFile(fs[0], dest); err0 != nil {
-			logger.Error(err0)
+			logger.Errorln(err0)
 		}
 	}
 
 	MountCustomFiles(mergePath, conf.Mount)
 
 	if err0 := syscall.Chdir(mergePath); err0 != nil {
-		logger.Error(err0)
+		logger.Errorln(err0)
 	}
 	if err0 := syscall.Chroot("./"); err0 != nil {
-		logger.Error(err0)
+		logger.Errorln(err0)
 	}
 
 	return nil
@@ -167,11 +167,11 @@ func ReleaseBaseFiles(conf *Configuration) {
 		arg := mountList[i]
 		target := filepath.Join(mergePath, arg.target)
 		if err := syscall.Unmount(target, 0); err != nil {
-			logger.Error(err)
+			logger.Errorln(err)
 		}
 	}
 
 	if err := syscall.Unmount(mergePath, 0); err != nil {
-		logger.Error(err)
+		logger.Errorln(err)
 	}
 }

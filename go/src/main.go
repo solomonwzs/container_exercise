@@ -8,6 +8,7 @@ package main
 import "C"
 import (
 	"cnet"
+	"csys"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -23,10 +24,13 @@ const (
 	_BRANCH_CONTAINER = "container"
 )
 
+type _LP struct{}
+
+func (lp _LP) L(r *logger.Record) error { fmt.Printf("%s", r); return nil }
+func (lp _LP) Close() error             { return nil }
+
 func init() {
-	logger.NewLogger(func(r *logger.Record) {
-		fmt.Printf("%s", r)
-	})
+	logger.NewLogger(_LP{})
 
 	switch os.Args[0] {
 	case _BRANCH_CONTAINER:
@@ -37,7 +41,8 @@ func init() {
 }
 
 func UidMap(pid, idInsideNs, idOutsideNs, mapRange int) (err error) {
-	f, err := os.OpenFile(PathProcUidMap(pid), os.O_RDWR|os.O_CREATE, 0755)
+	f, err := os.OpenFile(csys.PathProcUidMap(pid), os.O_RDWR|os.O_CREATE,
+		0755)
 	if err != nil {
 		return
 	}
@@ -49,7 +54,8 @@ func UidMap(pid, idInsideNs, idOutsideNs, mapRange int) (err error) {
 }
 
 func GidMap(pid, idInsideNs, idOutsideNs, mapRange int) (err error) {
-	f, err := os.OpenFile(PathProcGidMap(pid), os.O_RDWR|os.O_CREATE, 0755)
+	f, err := os.OpenFile(csys.PathProcGidMap(pid), os.O_RDWR|os.O_CREATE,
+		0755)
 	if err != nil {
 		return
 	}
@@ -78,7 +84,7 @@ func main() {
 	defer f1.Close()
 
 	process, err := os.StartProcess(
-		_PATH_PROC_BINARY,
+		csys.PATH_PROC_BINARY,
 		[]string{_BRANCH_CONTAINER,
 			filename,
 			strconv.Itoa(int(f0.Fd())),
@@ -90,7 +96,7 @@ func main() {
 				Pdeathsig: syscall.SIGTERM,
 				Cloneflags: syscall.CLONE_NEWPID |
 					// syscall.CLONE_NEWUSER |
-					// C.CLONE_NEWCGROUP |
+					C.CLONE_NEWCGROUP |
 					syscall.CLONE_NEWNS |
 					syscall.CLONE_NEWUTS |
 					syscall.CLONE_NEWIPC |
@@ -105,7 +111,7 @@ func main() {
 		process.Pid, conf.Network)
 	for _, builder := range networkBuilders {
 		if err = builder.BuildNetwork(); err != nil {
-			logger.Error(err)
+			logger.Errorln(err)
 		}
 		defer builder.ReleaseNetwork()
 	}
@@ -125,8 +131,4 @@ func main() {
 	if _, err = process.Wait(); err != nil {
 		panic(err)
 	}
-}
-
-func releaseContainerResource(conf *Configuration) {
-	ReleaseBaseFiles(conf)
 }

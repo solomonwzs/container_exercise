@@ -81,7 +81,7 @@ func containerRun() {
 	buf := make([]byte, 4)
 	mgrs.Read(buf)
 	pid := int(binary.BigEndian.Uint32(buf))
-	logger.Debug(pid)
+	logger.Debugln(pid)
 
 	// set network
 	networkBuilders := cnet.ParserNetworkBuilders(pid, conf.Network)
@@ -92,13 +92,13 @@ func containerRun() {
 
 	// mount
 	if err := BuildBaseFiles(&conf); err != nil {
-		logger.Error(err)
+		logger.Errorln(err)
 		// panic(err)
 	}
 
 	// set hostname
 	if err := syscall.Sethostname([]byte(conf.Hostname)); err != nil {
-		logger.Error(err)
+		logger.Errorln(err)
 		// panic(err)
 	}
 

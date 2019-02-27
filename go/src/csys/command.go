@@ -8,7 +8,7 @@ import (
 )
 
 func SystemCmd(cmd string, arg ...string) (err error) {
-	logger.Debug(cmd, arg)
+	logger.Debugln(cmd, arg)
 	c := exec.Command(cmd, arg...)
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
