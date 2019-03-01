@@ -1,6 +1,7 @@
 package main
 
 import (
+	"csys"
 	"fmt"
 	"io"
 	"os"
@@ -33,7 +34,7 @@ var copyFiles = [][2]string{
 	[2]string{"/etc/hosts", "/etc/hosts"},
 }
 
-func RootPaht(conf *Configuration) string {
+func RootPath(conf *Configuration) string {
 	return filepath.Join(conf.BaseSys.Workspace, conf.Name, "meger")
 }
 
@@ -116,7 +117,7 @@ func UmountCustomFiles(path string, customMountList []CMount) error {
 
 func BuildBaseFiles(conf *Configuration) (err error) {
 	lowerPath := filepath.Join(conf.BaseSys.Dir, conf.BaseSys.System)
-	mergePath := RootPaht(conf)
+	mergePath := RootPath(conf)
 	upperPath := filepath.Join(conf.BaseSys.Workspace, conf.Name, "upper")
 	workPath := filepath.Join(conf.BaseSys.Workspace, conf.Name, "work")
 
@@ -159,7 +160,7 @@ func BuildBaseFiles(conf *Configuration) (err error) {
 }
 
 func ReleaseBaseFiles(conf *Configuration) {
-	mergePath := RootPaht(conf)
+	mergePath := RootPath(conf)
 
 	UmountCustomFiles(mergePath, conf.Mount)
 
@@ -174,4 +175,23 @@ func ReleaseBaseFiles(conf *Configuration) {
 	if err := syscall.Unmount(mergePath, 0); err != nil {
 		logger.Errorln(err)
 	}
+}
+
+func UmountContainFileSystems() (err error) {
+	infoList, err := csys.ParsePidMountinfos(1)
+	if err != nil {
+		return
+	}
+
+	for i := len(infoList) - 1; i >= 0; i-- {
+		point := infoList[i].MountPoint
+		if point == "/" {
+			continue
+		}
+		if err0 := syscall.Unmount(point, 0); err0 != nil {
+			logger.Errorln(err0, point)
+		}
+	}
+
+	return
 }

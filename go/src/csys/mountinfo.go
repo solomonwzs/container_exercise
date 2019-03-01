@@ -14,6 +14,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/solomonwzs/goxutil/logger"
 )
 
 const (
@@ -115,7 +117,46 @@ func ParseMountinfo(line string) (minfo Mountinfo, err error) {
 	}
 	minfo.OptionFields = make([]OptionField, 0)
 	for ; i < length && info[i] != "-"; i++ {
+		var of OptionField
+		arr := strings.Split(info[i], ":")
+		if len(arr) != 2 {
+			err = errors.New("invalid mountinfo: option fields")
+			return
+		}
+
+		switch arr[0] {
+		case "shared":
+			of.Group = MOFT_SHARED
+		case "master":
+			of.Group = MOFT_MASTER
+		case "propagate_from":
+			of.Group = MOFT_PROPAGATE
+		default:
+			err = errors.New("invalid mountinfo: option fields")
+			return
+		}
+
+		of.Group, err = strconv.Atoi(arr[1])
+		if err != nil {
+			err = errors.New("invalid mountinfo: option fields")
+			return
+		}
+		minfo.OptionFields = append(minfo.OptionFields, of)
 	}
+
+	i += 1
+	if i >= length {
+		err = errors.New("invalid mountinfo: mount source")
+		return
+	}
+	minfo.MountSrc = info[i]
+
+	i += 1
+	if i == length {
+		err = errors.New("invalid mountinfo: super options")
+		return
+	}
+	minfo.SuperOptions = strings.Split(info[i], ",")
 
 	return
 }
@@ -143,6 +184,8 @@ func ParsePidMountinfos(pid int) (infoList []Mountinfo, err error) {
 		minfo, err = ParseMountinfo(line)
 		if err == nil {
 			infoList = append(infoList, minfo)
+		} else {
+			logger.Errorln(err)
 		}
 	}
 

@@ -95,6 +95,7 @@ func containerRun() {
 		logger.Errorln(err)
 		// panic(err)
 	}
+	defer UmountContainFileSystems()
 
 	// set hostname
 	if err := syscall.Sethostname([]byte(conf.Hostname)); err != nil {

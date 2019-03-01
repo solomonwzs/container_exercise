@@ -119,16 +119,20 @@ func main() {
 	UidMap(process.Pid, 0, os.Getuid(), 1)
 	GidMap(process.Pid, 0, os.Getgid(), 1)
 
-	defer ReleaseBaseFiles(&conf)
-
-	// C.net_create_veth(C.CString("xx0"), C.CString("xx1"),
-	// C.unsigned(process.Pid))
-
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, uint32(process.Pid))
 	f0.Write(buf)
 
+	defer ReleaseContainer(&conf)
+
 	if _, err = process.Wait(); err != nil {
 		panic(err)
+	}
+}
+
+func ReleaseContainer(conf *Configuration) {
+	rootPath := RootPath(conf)
+	if err := syscall.Unmount(rootPath, 0); err != nil {
+		logger.Errorln(rootPath, err)
 	}
 }
