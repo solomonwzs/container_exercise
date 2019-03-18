@@ -9,7 +9,6 @@ import "C"
 import (
 	"cnet"
 	"csys"
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"os"
@@ -80,6 +79,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	mgrs := NewMSock(f0)
 	defer f0.Close()
 	defer f1.Close()
 
@@ -119,10 +119,7 @@ func main() {
 	UidMap(process.Pid, 0, os.Getuid(), 1)
 	GidMap(process.Pid, 0, os.Getgid(), 1)
 
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(process.Pid))
-	f0.Write(buf)
-
+	mgrs.WriteUint32(uint32(process.Pid))
 	defer ReleaseContainer(&conf)
 
 	if _, err = process.Wait(); err != nil {

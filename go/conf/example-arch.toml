@@ -1,0 +1,54 @@
+name = "container-test-1"
+hostname = "container-test-1"
+
+env = [
+"PATH=/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/bin:/sbin",
+"TERM=xterm-256color"
+]
+
+[base_system]
+dir = "/home/solomon/workspace/basesystem"
+system = "archlinux_20181201"
+workspace = "/home/solomon/workspace/basesystem/ws"
+
+[[mount]]
+src = "/home/solomon/workspace"
+target = "/root/workspace"
+
+[network]
+
+# [[network.interface]]
+# name = "eth0"
+# type = "bridge"
+# mask = "255.255.255.0"
+# ip = "172.20.1.11"
+
+# [[network.interface]]
+# name = "eth1"
+# type = "vlan"
+# host_interface = "eno1"
+# id = "105"
+# mask = "255.255.255.0"
+# ip = "192.168.197.133"
+
+[[network.interface]]
+name = "eth2"
+type = "ipvlan"
+host_interface = "eno1"
+mode = "l2" # l2 / l3 / l3s
+# mask = "255.255.255.0"
+# ip = "192.168.197.134"
+
+# [[network.interface]]
+# name = "eth3"
+# type = "macvlan"
+# host_interface = "eno1"
+# mode = "bridge" # bridge / vepa / private
+# mask = "255.255.255.0"
+# ip = "192.168.197.135"
+
+[[network.route]]
+dest = "0.0.0.0"
+mask = "0.0.0.0"
+gateway = "192.168.197.252"
+# gateway = "172.20.1.1"

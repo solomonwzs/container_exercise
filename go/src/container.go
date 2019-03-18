@@ -2,7 +2,6 @@ package main
 
 import (
 	"cnet"
-	"encoding/binary"
 	"io"
 	"os"
 	"os/exec"
@@ -18,12 +17,12 @@ import (
 type ContainerServer struct {
 	closer.Closer
 	uniquid  uint64
-	conf     *Configuration
+	conf     Configuration
 	rwc      io.ReadWriteCloser
 	callback map[uint64]ProtoFuncCallback
 }
 
-func NewContainerServer(rwc io.ReadWriteCloser, conf *Configuration) (
+func NewContainerServer(rwc io.ReadWriteCloser, conf Configuration) (
 	s *ContainerServer) {
 	s = &ContainerServer{
 		uniquid: 0,
@@ -37,13 +36,35 @@ func NewContainerServer(rwc io.ReadWriteCloser, conf *Configuration) (
 }
 
 func (s *ContainerServer) Serv() {
-	buf := make([]byte, _MAX_PROTO_REQ_SIZE)
+	buf := make([]byte, MAX_PROTO_REQ_SIZE)
 	for {
 		_, err := s.rwc.Read(buf)
 		if err != nil {
-			panic(err)
+			logger.Errorln(err)
+			return
 		}
 	}
+}
+
+func getMessageSock() *os.File {
+	f0, _ := strconv.Atoi(os.Args[2])
+	f1, _ := strconv.Atoi(os.Args[3])
+
+	fm := os.NewFile(uintptr(f0), "sock-main")
+	fm.Close()
+
+	syscall.CloseOnExec(f1)
+	f := os.NewFile(uintptr(f1), "mgrs")
+	return f
+}
+
+func getConfiguration() (Configuration, error) {
+	filename := os.Args[1]
+	var conf Configuration
+	if _, err := toml.DecodeFile(filename, &conf); err != nil {
+		return conf, err
+	}
+	return conf, nil
 }
 
 func containerRun() {
@@ -61,26 +82,17 @@ func containerRun() {
 		}
 	}()
 
-	filename := os.Args[1]
-	f0, _ := strconv.Atoi(os.Args[2])
-	f1, _ := strconv.Atoi(os.Args[3])
-	var conf Configuration
-	if _, err := toml.DecodeFile(filename, &conf); err != nil {
+	f := getMessageSock()
+	mgrs := NewMSock(f)
+	defer f.Close()
+
+	conf, err := getConfiguration()
+	if err != nil {
 		panic(err)
 	}
 
-	fm := os.NewFile(uintptr(f0), "sock-main")
-	fm.Close()
-
-	syscall.CloseOnExec(f1)
-	mgrs := os.NewFile(uintptr(f1), "mgrs")
-	defer mgrs.Close()
-
-	// csys.SystemCmd("id")
-
-	buf := make([]byte, 4)
-	mgrs.Read(buf)
-	pid := int(binary.BigEndian.Uint32(buf))
+	p, _ := mgrs.ReadUint32()
+	pid := int(p)
 	logger.Debugln(pid)
 
 	// set network
@@ -92,15 +104,13 @@ func containerRun() {
 
 	// mount
 	if err := BuildBaseFiles(&conf); err != nil {
-		logger.Errorln(err)
-		// panic(err)
+		panic(err)
 	}
 	defer UmountContainFileSystems()
 
 	// set hostname
 	if err := syscall.Sethostname([]byte(conf.Hostname)); err != nil {
-		logger.Errorln(err)
-		// panic(err)
+		panic(err)
 	}
 
 	// run
@@ -110,9 +120,6 @@ func containerRun() {
 	cmd.Stderr = os.Stderr
 	cmd.Env = conf.Env
 	if err := cmd.Run(); err != nil {
-		panic(err)
-	}
-	if err := cmd.Wait(); err != nil {
-		panic(err)
+		logger.Errorln(err)
 	}
 }

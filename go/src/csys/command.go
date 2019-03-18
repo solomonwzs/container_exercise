@@ -14,6 +14,7 @@ func SystemCmd(cmd string, arg ...string) (err error) {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	if err = c.Run(); err != nil {
+		logger.Errorln(err)
 		return
 	}
 	c.Wait()
