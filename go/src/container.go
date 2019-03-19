@@ -16,29 +16,28 @@ import (
 
 type ContainerServer struct {
 	closer.Closer
-	uniquid  uint64
-	conf     Configuration
-	rwc      io.ReadWriteCloser
-	callback map[uint64]ProtoFuncCallback
+	uniquid uint64
+	conf    Configuration
+	rw      io.ReadWriter
 }
 
-func NewContainerServer(rwc io.ReadWriteCloser, conf Configuration) (
+func NewContainerServer(rw io.ReadWriter, conf Configuration) (
 	s *ContainerServer) {
 	s = &ContainerServer{
 		uniquid: 0,
 		conf:    conf,
-		rwc:     rwc,
+		rw:      rw,
 	}
 	s.Closer = closer.NewCloser(func() error {
-		return s.rwc.Close()
+		return nil
 	})
 	return
 }
 
-func (s *ContainerServer) Serv() {
+func (s *ContainerServer) RecvLoop() {
 	buf := make([]byte, MAX_PROTO_REQ_SIZE)
 	for {
-		_, err := s.rwc.Read(buf)
+		_, err := s.rw.Read(buf)
 		if err != nil {
 			logger.Errorln(err)
 			return
@@ -68,6 +67,7 @@ func getConfiguration() (Configuration, error) {
 }
 
 func containerRun() {
+	end := make(chan struct{})
 	ch := make(chan os.Signal)
 	signal.Notify(ch, os.Interrupt, os.Kill, syscall.SIGINT,
 		syscall.SIGTERM, syscall.SIGCHLD)
@@ -78,6 +78,8 @@ func containerRun() {
 				if sig == syscall.SIGCHLD {
 					syscall.Wait4(-1, nil, 0, nil)
 				}
+			case <-end:
+				return
 			}
 		}
 	}()
@@ -122,4 +124,5 @@ func containerRun() {
 	if err := cmd.Run(); err != nil {
 		logger.Errorln(err)
 	}
+	close(end)
 }

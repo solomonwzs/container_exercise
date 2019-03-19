@@ -12,7 +12,7 @@ const (
 
 	SIZEOF_PROTO_HEADER = int(unsafe.Sizeof(ProtoHeader{}))
 
-	OP_NOTIFY = iota
+	OP_INIT_CONTAINER = iota
 	OP_FUNCTION_CALL
 )
 
