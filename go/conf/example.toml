@@ -1,8 +1,8 @@
 name = "container-test-0"
 hostname = "container-test-0"
 env = [
-"PATH=/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/bin:/sbin",
-"TERM=xterm-256color"
+    "PATH=/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/bin:/sbin",
+    "TERM=xterm-256color"
 ]
 
 [base_system]

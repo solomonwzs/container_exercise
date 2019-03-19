@@ -9,33 +9,32 @@ C_SRC	= $(wildcard csrc/*.c)
 BASE	= ${PWD}
 GOPATH	:= ${BASE}:${GOPATH}
 GO		?= go
-GO_SRC	= "src"
+GO_SRC	= $(shell find ./src -iname *.go)
 
-BUILD_PATH 		= "build"
 IPROUTE2_PATH 	= "./deps/iproute2"
 
 
+./build/main.goc:$(GO_SRC) ./build ./build/libnetwork.a ./src/ctype.go
+	@$(GO) build -o $@ ./src/*.go
+
 .c.o:
-	@echo -e "\033[0;33m*\033[0m $@"
 	@$(C) $(CFLAGS) $< -o $@
 
-all:pre libnetwork
-	@$(GO) build -o $(BUILD_PATH)/main.goc $(GO_SRC)/*.go
+./build:
+	@[ -d $@ ] || mkdir $@
 
-obj:$(C_SRC:%.c=%.o)
-
-pre:
-	@[ -d $(BUILD_PATH) ] || mkdir $(BUILD_PATH)
-
-dep-iproute2:
+./deps/iproute2/lib/*.a:
 	@git submodule update
 	@cd $(IPROUTE2_PATH) && ./configure
 	@make -C $(IPROUTE2_PATH)
 
-libnetwork:pre obj
-	@$(AR) -rs $(BUILD_PATH)/libnetwork.a $(C_PATH)/*.o \
-		$(IPROUTE2_PATH)/ip/rtm_map.o
+./build/libnetwork.a:./deps/iproute2/lib/*.a ./build $(C_SRC:%.c=%.o)
+	@$(AR) -rs $@ $(C_PATH)/*.o $(IPROUTE2_PATH)/ip/rtm_map.o
 
+./src/ctype.go:./include/ctype.go ./include/cont_proto.h
+	@$(GO) tool cgo -godefs $< > $@
+
+.PHONY: clean
 clean:
 	@rm $(C_PATH)/*.o
-	@rm -r $(BUILD_PATH)
+	@rm -r ./build
