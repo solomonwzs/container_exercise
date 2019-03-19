@@ -24,6 +24,7 @@ IPROUTE2_PATH 	= "./deps/iproute2"
 	@[ -d $@ ] || mkdir $@
 
 ./deps/iproute2/lib/*.a:
+	@git submodule init
 	@git submodule update
 	@cd $(IPROUTE2_PATH) && ./configure
 	@make -C $(IPROUTE2_PATH)
