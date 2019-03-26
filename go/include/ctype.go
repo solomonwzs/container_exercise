@@ -9,11 +9,16 @@ package main
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/..
-
 #include "include/cont_proto.h"
 */
 import "C"
 
+const (
+	CONT_INIT = C.CONT_INIT
+)
+
 type (
 	ContInHeader C.struct_cont_in_header
+	ContInitIn   C.struct_cont_init_in
+	ContInitOut  C.struct_cont_init_out
 )

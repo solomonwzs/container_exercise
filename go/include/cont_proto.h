@@ -13,7 +13,12 @@ struct cont_in_header {
   uint32_t len;
 };
 
-struct cint_init_in {
+struct cont_init_in {
+  uint32_t pid;
+  uint32_t padding;
+};
+
+struct cont_init_out {
   uint32_t pid;
   uint32_t padding;
 };
