@@ -2,48 +2,16 @@ package main
 
 import (
 	"cnet"
-	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strconv"
 	"syscall"
+	"unsafe"
 
 	"github.com/BurntSushi/toml"
-	"github.com/solomonwzs/goxutil/closer"
 	"github.com/solomonwzs/goxutil/logger"
 )
-
-type ContainerServer struct {
-	closer.Closer
-	uniquid uint64
-	conf    Configuration
-	rw      io.ReadWriter
-}
-
-func NewContainerServer(rw io.ReadWriter, conf Configuration) (
-	s *ContainerServer) {
-	s = &ContainerServer{
-		uniquid: 0,
-		conf:    conf,
-		rw:      rw,
-	}
-	s.Closer = closer.NewCloser(func() error {
-		return nil
-	})
-	return
-}
-
-func (s *ContainerServer) RecvLoop() {
-	buf := make([]byte, MAX_PROTO_REQ_SIZE)
-	for {
-		_, err := s.rw.Read(buf)
-		if err != nil {
-			logger.Errorln(err)
-			return
-		}
-	}
-}
 
 func getMessageSock() *os.File {
 	f0, _ := strconv.Atoi(os.Args[2])
@@ -53,8 +21,8 @@ func getMessageSock() *os.File {
 	fm.Close()
 
 	syscall.CloseOnExec(f1)
-	f := os.NewFile(uintptr(f1), "mgrs")
-	return f
+	fc := os.NewFile(uintptr(f1), "sock-cont")
+	return fc
 }
 
 func getConfiguration() (Configuration, error) {
@@ -68,24 +36,8 @@ func getConfiguration() (Configuration, error) {
 
 func containerRun() {
 	end := make(chan struct{})
-	ch := make(chan os.Signal)
-	signal.Notify(ch, os.Interrupt, os.Kill, syscall.SIGINT,
-		syscall.SIGTERM, syscall.SIGCHLD)
-	go func() {
-		for {
-			select {
-			case sig := <-ch:
-				if sig == syscall.SIGCHLD {
-					syscall.Wait4(-1, nil, 0, nil)
-				}
-			case <-end:
-				return
-			}
-		}
-	}()
 
 	f := getMessageSock()
-	mgrs := NewMSock(f)
 	defer f.Close()
 
 	conf, err := getConfiguration()
@@ -93,36 +45,74 @@ func containerRun() {
 		panic(err)
 	}
 
-	p, _ := mgrs.ReadUint32()
-	pid := int(p)
-	logger.Debugln(pid)
+	ch := make(chan os.Signal)
+	signal.Notify(ch, syscall.SIGCHLD)
+	go func() {
+		for {
+			select {
+			case <-ch:
+				syscall.Wait4(-1, nil, 0, nil)
+			}
+		}
+	}()
 
+	go func() {
+		buf := make([]byte, MAX_PROTO_REQ_SIZE)
+		for {
+			n, err := f.Read(buf)
+			if err != nil {
+				logger.Errorln(err)
+				return
+			}
+
+			header := (*ContInHeader)(unsafe.Pointer(&buf[0]))
+			if uint32(n) != header.Len {
+				continue
+			}
+
+			switch header.Opcode {
+			case CONT_INIT:
+				initIn := (*ContInitIn)(
+					unsafe.Pointer(&buf[SIZEOF_CONT_IN_HEADER]))
+				contHandlerInit(&conf, header, initIn, end)
+			}
+		}
+	}()
+	<-end
+}
+
+func contHandlerInit(conf *Configuration, header *ContInHeader,
+	initIn *ContInitIn, end chan struct{}) {
+	logger.Debugln(initIn.Pid)
 	// set network
-	networkBuilders := cnet.ParserNetworkBuilders(pid, conf.Network)
+	networkBuilders := cnet.ParserNetworkBuilders(int(initIn.Pid),
+		conf.Network)
 	for _, builder := range networkBuilders {
 		builder.SetupNetwork()
 	}
 	cnet.AddNetworkRoutes(conf.Network.Routes)
 
 	// mount
-	if err := BuildBaseFiles(&conf); err != nil {
+	if err := BuildBaseFiles(conf); err != nil {
 		panic(err)
 	}
-	defer UmountContainFileSystems()
 
 	// set hostname
 	if err := syscall.Sethostname([]byte(conf.Hostname)); err != nil {
 		panic(err)
 	}
 
-	// run
-	cmd := exec.Command("/bin/bash")
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = conf.Env
-	if err := cmd.Run(); err != nil {
-		logger.Errorln(err)
-	}
-	close(end)
+	go func() {
+		// run
+		cmd := exec.Command("/bin/bash")
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Env = conf.Env
+		if err := cmd.Run(); err != nil {
+			logger.Errorln(err)
+		}
+		UmountContainFileSystems()
+		close(end)
+	}()
 }

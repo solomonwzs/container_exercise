@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"syscall"
+	"unsafe"
 
 	"github.com/BurntSushi/toml"
 	"github.com/solomonwzs/goxutil/logger"
@@ -75,20 +76,19 @@ func main() {
 	}
 	logger.Debugf("%+v\n", conf)
 
-	f0, f1, err := cnet.NewSocketpair()
+	f, fCont, err := cnet.NewSocketpair()
 	if err != nil {
 		panic(err)
 	}
-	mgrs := NewMSock(f0)
-	defer f0.Close()
-	defer f1.Close()
+	defer f.Close()
+	defer fCont.Close()
 
 	process, err := os.StartProcess(
 		csys.PATH_PROC_BINARY,
 		[]string{_BRANCH_CONTAINER,
 			filename,
-			strconv.Itoa(int(f0.Fd())),
-			strconv.Itoa(int(f1.Fd())),
+			strconv.Itoa(int(f.Fd())),
+			strconv.Itoa(int(fCont.Fd())),
 		},
 		&os.ProcAttr{
 			Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
@@ -119,7 +119,15 @@ func main() {
 	UidMap(process.Pid, 0, os.Getuid(), 1)
 	GidMap(process.Pid, 0, os.Getgid(), 1)
 
-	mgrs.WriteUint32(uint32(process.Pid))
+	buf := make([]byte, MAX_PROTO_REQ_SIZE)
+	header := (*ContInHeader)(unsafe.Pointer(&buf[0]))
+	header.Len = SIZEOF_CONT_IN_HEADER + SIZEOF_CONT_INIT_IN
+	header.Opcode = CONT_INIT
+	initIn := (*ContInitIn)(
+		unsafe.Pointer(&buf[SIZEOF_CONT_IN_HEADER]))
+	initIn.Pid = uint32(process.Pid)
+	f.Write(buf[:header.Len])
+
 	defer ReleaseContainer(&conf)
 
 	if _, err = process.Wait(); err != nil {
